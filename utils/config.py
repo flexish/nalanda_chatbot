@@ -1,0 +1,48 @@
+"""Application configuration from environment variables."""
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+DATA_FOLDER = Path(os.getenv("DATA_FOLDER", "./data"))
+VECTORSTORE_PATH = Path(os.getenv("VECTORSTORE_PATH", "./vectorstore"))
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+
+COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "multi_modal_rag")
+DOCSTORE_FILENAME = "docstore.pkl"
+
+TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
+SUMMARIZE_CONCURRENCY = int(os.getenv("SUMMARIZE_CONCURRENCY", "3"))
+
+IMAGE_SUMMARY_PROMPT = os.getenv(
+    "IMAGE_SUMMARY_PROMPT",
+    "Describe the image in detail. For context, the image is part of documents about "
+    "the Archaeological Site of Nalanda Mahavihara. Explain what the image shows in "
+    "relation to the site's history, archaeology, and conservation.",
+)
+
+TEXT_SUMMARY_PROMPT = """You are an assistant tasked with summarizing tables and text.
+Give a concise summary of the table or text.
+
+Respond only with the summary, no additionnal comment.
+Do not start your message by saying "Here is a summary" or anything like that.
+Just give the summary as it is.
+
+Table or text chunk: {element}
+"""
+
+ANSWER_PROMPT_TEMPLATE = """Answer the question based only on the following context, which can include text, tables, and the below image.
+Context: {context_text}
+Question: {question}
+"""

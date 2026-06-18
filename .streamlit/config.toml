@@ -1,0 +1,3 @@
+[server]
+# Avoid Streamlit introspecting torch/transformers modules (Windows DLL issues).
+fileWatcherType = "none"

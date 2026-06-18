@@ -1,0 +1,25 @@
+# Core
+python-dotenv>=1.0.0
+streamlit>=1.32.0
+
+# LangChain ecosystem
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-openai>=0.2.0
+langchain-groq>=0.2.0
+langchain-chroma>=0.2.0
+langchain-classic>=0.0.1
+langgraph>=0.2.0
+
+# Vector store & embeddings
+chromadb>=0.5.0
+tiktoken>=0.7.0
+
+# PDF extraction (notebook pattern)
+unstructured[all-docs]>=0.16.0
+unstructured-inference>=0.8.0
+pillow>=10.0.0
+lxml>=5.0.0
+
+# Optional: faster PDF fallback (not used by default ingest)
+pypdf>=4.0.0

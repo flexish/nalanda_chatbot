@@ -1,0 +1,19 @@
+# Environment variables
+.env
+
+# Data files
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# ChromaDB
+chroma_db/
+content/
