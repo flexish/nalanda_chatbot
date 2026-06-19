@@ -5,6 +5,13 @@ Extracts CompositeElement text chunks, tables, and embedded images (base64).
 
 from __future__ import annotations
 
+import os
+import unstructured_pytesseract
+
+# Fix the Tesseract trailing slash path resolution and binary binding on Windows
+os.environ["TESSDATA_PREFIX"] = r"C:\Program Files\Tesseract-OCR\tessdata"
+unstructured_pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, List
@@ -112,7 +119,11 @@ def ingest_folder(folder: str | Path) -> list[IngestedPDF]:
     results: list[IngestedPDF] = []
     for pdf in sorted(iter_pdfs(folder), key=lambda p: p.name.lower()):
         print(f"[ingest] {pdf.name}")
-        results.append(ingest_pdf(pdf))
-        doc = results[-1]
-        print(f"         -> {len(doc.texts)} text, {len(doc.tables)} tables, {len(doc.images)} images")
+        try:
+            results.append(ingest_pdf(pdf))
+            doc = results[-1]
+            print(f"         -> {len(doc.texts)} text, {len(doc.tables)} tables, {len(doc.images)} images")
+        except Exception as e:
+            print(f"   ⚠️ ERROR processing {pdf.name}: {e}. Skipping file.")
+            continue
     return results
