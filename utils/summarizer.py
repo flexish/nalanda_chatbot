@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Sequence
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -77,7 +77,7 @@ def summarize_tables(
 
 
 def summarize_images(
-    images_b64: List[str],
+    images_b64: Sequence[str | ParentDocument],
     on_progress: Optional[Callable[[str], None]] = None,
 ) -> List[str]:
     if not images_b64:
@@ -85,4 +85,8 @@ def summarize_images(
     if on_progress:
         on_progress(f"Summarizing {len(images_b64)} images (vision model)...")
     chain = _image_summarizer()
-    return chain.batch(images_b64, {"max_concurrency": 2})
+    image_payloads = [
+        image.text if isinstance(image, ParentDocument) else image
+        for image in images_b64
+    ]
+    return chain.batch(image_payloads, {"max_concurrency": 2})

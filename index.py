@@ -40,6 +40,9 @@ def main() -> int:
         from utils.ingest import ingest_pdf
 
         print(f"Indexing {args.pdf}...")
+        removed = store.remove_source(str(args.pdf))
+        if removed:
+            print(f"Replaced {removed} existing entries for {args.pdf}.")
         ingested = ingest_pdf(args.pdf)
         counts = store.add_ingested(ingested, on_progress=print)
         print(f"Done: {counts}")
@@ -49,26 +52,21 @@ def main() -> int:
             print(f"Data folder not found: {folder}", file=sys.stderr)
             return 1
         print(f"Indexing PDFs in {folder} -> {args.vectorstore}")
-        
-        # --- RESUME CAPABILITY IMPLEMENTATION ---
-        # 1. Look up files already processed using the store's metadata tracking
-        try:
-            # Most Chroma/LangChain wrappers let you extract all existing document metadata
-            existing_data = store.chroma_vectorstore.get(include=["metadatas"])
-            indexed_sources = {meta.get("source") for meta in existing_data.get("metadatas", []) if meta and "source" in meta}
-        except Exception:
-            try:
-                # Secondary fallback depending on how your internal vectorstore class is named
-                existing_data = store.db.get(include=["metadatas"])
-                indexed_sources = {meta.get("source") for meta in existing_data.get("metadatas", []) if meta and "source" in meta}
-            except Exception:
-                indexed_sources = set()
 
-        # 2. Dynamically clean and run individual files instead of processing the entire folder at once
+        try:
+            existing_data = store.vectorstore.get(include=["metadatas"])
+            indexed_sources = {
+                meta.get("source")
+                for meta in existing_data.get("metadatas", [])
+                if isinstance(meta, dict) and meta.get("source")
+            }
+        except Exception:
+            indexed_sources = set()
+
         from utils.ingest import iter_pdfs, ingest_pdf
-        
+
         pdf_files = sorted(iter_pdfs(folder), key=lambda p: p.name.lower())
-        totals = {"text": 0, "table": 0, "image": 0}
+        totals = {"texts": 0, "tables": 0, "images": 0}
         
         for pdf in pdf_files:
             if str(pdf) in indexed_sources:
@@ -86,7 +84,6 @@ def main() -> int:
                 continue
                 
         print(f"Done: {totals}")
-        # --- END RESUME CAPABILITY ---
 
     print("Store stats:", store.stats())
     return 0

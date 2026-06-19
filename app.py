@@ -1,6 +1,7 @@
 """Streamlit UI for multimodal RAG."""
 
 import base64
+import html
 import io
 from pathlib import Path
 
@@ -15,22 +16,128 @@ from utils.rag_graph import query_with_sources
 from utils.vectorstore import MultimodalVectorStore
 
 
+st.set_page_config(page_title="Multimodal RAG - Nalanda", layout="wide")
+
+
 @st.cache_resource(show_spinner="Loading vector store...")
 def get_store(vectorstore_path: str) -> MultimodalVectorStore:
     return MultimodalVectorStore.load(vectorstore_path)
 
 
-def display_base64_image(b64: str, caption: str = "") -> None:
+def display_base64_image(b64: str, caption: str = "") -> bool:
     try:
         img = Image.open(io.BytesIO(base64.b64decode(b64)))
-        st.image(img, caption=caption or None, use_container_width=True)
-    except Exception as exc:
-        st.warning(f"Could not render image: {exc}")
+        st.image(img, caption=caption or None, width="content")
+        return True
+    except Exception:
+        return False
 
 
-st.set_page_config(page_title="Multimodal RAG — Nalanda", layout="wide")
+def _short_description(text: str, max_chars: int = 260) -> str:
+    text = (text or "").strip()
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rsplit(" ", 1)[0] + "..."
+
+
+def _init_chat_state() -> None:
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+
+def _chat_history_for_prompt(max_turns: int = 4, max_chars: int = 1800) -> str:
+    lines: list[str] = []
+    for message in st.session_state.messages[-max_turns * 2 :]:
+        role = "User" if message.get("role") == "user" else "Assistant"
+        content = (message.get("content") or "").strip()
+        captions = [cap for cap in message.get("captions", []) if cap]
+        if not content and captions:
+            content = "Images shown: " + " | ".join(captions[:4])
+        if content:
+            lines.append(f"{role}: {content}")
+    history = "\n".join(lines)
+    return history if len(history) <= max_chars else history[-max_chars:]
+
+
+def _render_user_message(content: str) -> None:
+    _, right = st.columns([1, 2])
+    with right:
+        st.markdown(
+            f'<div class="chat-row user-row"><div class="chat-bubble user-bubble">{html.escape(content)}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_assistant_message(message: dict) -> None:
+    left, _ = st.columns([2, 1])
+    with left:
+        content = (message.get("content") or "").strip()
+        images = message.get("images", []) or []
+        captions = message.get("captions", []) or []
+        verified = message.get("verified")
+        verification_reason = (message.get("verification_reason") or "").strip()
+
+        if content:
+            st.markdown(
+                f'<div class="chat-row assistant-row"><div class="chat-bubble assistant-bubble">{html.escape(content)}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        for idx, image_b64 in enumerate(images):
+            caption = captions[idx] if idx < len(captions) else ""
+            caption = (caption or "").strip() or _short_description(content)
+            if display_base64_image(image_b64, caption=caption):
+                st.markdown(
+                    f'<div class="image-caption">{html.escape(caption or "Description unavailable.")}</div>',
+                    unsafe_allow_html=True,
+                )
+
+        if verified is not None:
+            label = "Verified" if verified else "Not verified"
+            reason = f": {verification_reason}" if verification_reason else ""
+            st.caption(f"{label}{reason}")
+
+
+def _render_chat_history() -> None:
+    for message in st.session_state.messages:
+        if message.get("role") == "user":
+            _render_user_message(message.get("content", ""))
+        else:
+            _render_assistant_message(message)
+
+
+st.markdown(
+    """
+    <style>
+    .block-container { padding-bottom: 6rem; }
+    .chat-row { display: flex; margin: 0.35rem 0 0.75rem; width: 100%; }
+    .user-row { justify-content: flex-end; }
+    .assistant-row { justify-content: flex-start; }
+    .chat-bubble {
+        border-radius: 8px;
+        line-height: 1.45;
+        max-width: 100%;
+        padding: 0.75rem 0.9rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .user-bubble { background: #0f766e; color: white; }
+    .assistant-bubble {
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        color: #111827;
+    }
+    .image-caption { color: #4b5563; font-size: 0.9rem; margin: -0.35rem 0 0.8rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 st.title("Multimodal RAG")
 st.caption("Unstructured PDF extraction · MultiVectorRetriever · LangGraph · Vision LLM")
+
+_init_chat_state()
 
 with st.sidebar:
     st.header("Settings")
@@ -65,6 +172,9 @@ with st.sidebar:
                 from utils.ingest import ingest_pdf
 
                 log(f"Processing {selected_pdf.name}...")
+                removed = store.remove_source(str(selected_pdf))
+                if removed:
+                    log(f"Replacing {removed} existing entries for {selected_pdf.name}...")
                 ingested = ingest_pdf(selected_pdf)
                 counts = store.add_ingested(ingested, on_progress=log)
                 st.success(f"Indexed {selected_pdf.name}: {counts}")
@@ -78,6 +188,11 @@ with st.sidebar:
             st.error(str(exc))
 
     st.divider()
+    if st.button("Clear chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+    st.divider()
     try:
         stats = get_store(vectorstore_path).stats()
         st.metric("Summary vectors", stats["summary_vectors"])
@@ -85,41 +200,55 @@ with st.sidebar:
     except Exception:
         st.warning("Vector store not loaded yet.")
 
+_render_chat_history()
+
 question = st.chat_input("Ask about Nalanda Mahavihara...")
 if question:
-    with st.chat_message("user"):
-        st.write(question)
+    chat_history = _chat_history_for_prompt()
+    st.session_state.messages.append({"role": "user", "content": question})
+    _render_user_message(question)
 
-    with st.chat_message("assistant"):
-        with st.spinner("Retrieving and generating..."):
-            try:
-                store = get_store(vectorstore_path)
-                if store.stats()["summary_vectors"] == 0:
-                    st.error("Index is empty. Use the sidebar to index PDFs first.")
-                    st.stop()
-                result = query_with_sources(store, question, top_k=top_k)
-                st.markdown(result["response"])
+    with st.spinner("Retrieving and generating..."):
+        try:
+            store = get_store(vectorstore_path)
+            if store.stats()["summary_vectors"] == 0:
+                assistant_message = {
+                    "role": "assistant",
+                    "content": "Index is empty. Use the sidebar to index PDFs first.",
+                    "images": [],
+                    "captions": [],
+                    "verified": False,
+                    "verification_reason": "empty vector store",
+                }
+            else:
+                result = query_with_sources(
+                    store,
+                    question,
+                    top_k=top_k,
+                    chat_history=chat_history,
+                )
+                images = result["context"].get("images", [])
+                captions = result["context"].get("image_captions", [])
+                content = result.get("response", "")
+                if images and not content:
+                    content = f"Found {len(images)} matching image{'s' if len(images) != 1 else ''}."
+                assistant_message = {
+                    "role": "assistant",
+                    "content": content,
+                    "images": images,
+                    "captions": captions,
+                    "verified": result.get("verified"),
+                    "verification_reason": result.get("verification_reason", ""),
+                }
+        except Exception as exc:
+            assistant_message = {
+                "role": "assistant",
+                "content": f"Query failed: {exc}",
+                "images": [],
+                "captions": [],
+                "verified": False,
+                "verification_reason": "query failed",
+            }
 
-                with st.expander("Retrieved context", expanded=False):
-                    texts = result["context"].get("texts", [])
-                    images = result["context"].get("images", [])
-
-                    for i, text in enumerate(texts, 1):
-                        body = text.text if hasattr(text, "text") else str(text)
-                        meta = getattr(text, "metadata", {}) or {}
-                        page = meta.get("page_number") if isinstance(meta, dict) else getattr(meta, "page_number", None)
-                        source = meta.get("source") if isinstance(meta, dict) else getattr(meta, "source", None)
-                        st.markdown(f"**Chunk {i}** · page {page}")
-                        if source:
-                            st.caption(Path(source).name)
-                        st.text(body[:2000] + ("..." if len(body) > 2000 else ""))
-                        st.divider()
-
-                    if images:
-                        st.markdown(f"**{len(images)} retrieved image(s)**")
-                        cols = st.columns(min(3, len(images)))
-                        for idx, img_b64 in enumerate(images):
-                            with cols[idx % len(cols)]:
-                                display_base64_image(img_b64, caption=f"Image {idx + 1}")
-            except Exception as exc:
-                st.error(f"Query failed: {exc}")
+    st.session_state.messages.append(assistant_message)
+    _render_assistant_message(assistant_message)

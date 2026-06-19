@@ -81,23 +81,48 @@ class MultimodalVectorStore:
         counts = {"texts": 0, "tables": 0, "images": 0}
 
         if text_summaries:
-            counts["texts"] = self._add_parents(ingested.texts, text_summaries)
+            counts["texts"] = self._add_parents(ingested.texts, text_summaries, ingested.source)
         if table_summaries:
-            counts["tables"] = self._add_parents(ingested.tables, table_summaries)
+            counts["tables"] = self._add_parents(ingested.tables, table_summaries, ingested.source)
         if image_summaries:
-            counts["images"] = self._add_image_parents(ingested.images, image_summaries)
+            counts["images"] = self._add_image_parents(ingested.images, image_summaries, ingested.source)
 
         self.docstore.save()
         return counts
+
+    def remove_source(self, source: str) -> int:
+        """Remove any vector-store and docstore entries associated with a source file."""
+        ids: list[str] = []
+        try:
+            matches = self.vectorstore.get(where={"source": source})
+            ids = list(matches.get("ids", []) or [])
+        except Exception:
+            ids = []
+
+        if ids:
+            try:
+                self.vectorstore.delete(ids=ids)
+            except Exception:
+                try:
+                    self.vectorstore._collection.delete(ids=ids)
+                except Exception:
+                    pass
+
+            for doc_id in ids:
+                self.docstore.store.pop(doc_id, None)
+            self.docstore.save()
+
+        return len(ids)
 
     def _add_parents(
         self,
         parents: Sequence[ParentDocument],
         summaries: Sequence[str],
+        source: str,
     ) -> int:
         doc_ids = [str(uuid.uuid4()) for _ in parents]
         summary_docs = [
-            Document(page_content=summary, metadata={self.id_key: doc_ids[i]})
+            Document(page_content=summary, metadata={self.id_key: doc_ids[i], "source": source})
             for i, summary in enumerate(summaries)
         ]
         self.retriever.vectorstore.add_documents(summary_docs)
@@ -108,14 +133,19 @@ class MultimodalVectorStore:
         self,
         images_b64: Sequence[str],
         summaries: Sequence[str],
+        source: str,
     ) -> int:
         doc_ids = [str(uuid.uuid4()) for _ in images_b64]
         summary_docs = [
-            Document(page_content=summary, metadata={self.id_key: doc_ids[i]})
+            Document(page_content=summary, metadata={self.id_key: doc_ids[i], "source": source})
             for i, summary in enumerate(summaries)
         ]
         self.retriever.vectorstore.add_documents(summary_docs)
-        self.retriever.docstore.mset(list(zip(doc_ids, list(images_b64))))
+        image_parents = [
+            ParentDocument(text=image_b64, metadata={"kind": "image", self.id_key: doc_ids[i], "source": source}, kind="image")
+            for i, image_b64 in enumerate(images_b64)
+        ]
+        self.retriever.docstore.mset(list(zip(doc_ids, image_parents)))
         return len(images_b64)
 
     def index_folder(

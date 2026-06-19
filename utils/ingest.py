@@ -33,7 +33,7 @@ class IngestedPDF:
     source: str
     texts: List[ParentDocument]
     tables: List[ParentDocument]
-    images: List[str]  # base64 strings
+    images: List[ParentDocument]
 
 
 def _element_metadata(el: Any) -> dict[str, Any]:
@@ -62,10 +62,10 @@ def partition_pdf_file(pdf_path: str | Path) -> list:
     )
 
 
-def extract_from_chunks(chunks: list, source: str) -> tuple[list[ParentDocument], list[ParentDocument], list[str]]:
+def extract_from_chunks(chunks: list, source: str) -> tuple[list[ParentDocument], list[ParentDocument], list[ParentDocument]]:
     texts: list[ParentDocument] = []
     tables: list[ParentDocument] = []
-    images: list[str] = []
+    images: list[ParentDocument] = []
 
     for chunk in chunks:
         chunk_type = type(chunk).__name__
@@ -90,7 +90,14 @@ def extract_from_chunks(chunks: list, source: str) -> tuple[list[ParentDocument]
                 if type(el).__name__ == "Image":
                     b64 = getattr(el.metadata, "image_base64", None)
                     if b64:
-                        images.append(b64)
+                        image_meta = _element_metadata(el)
+                        images.append(
+                            ParentDocument(
+                                text=b64,
+                                metadata={**image_meta, "source": source, "kind": "image"},
+                                kind="image",
+                            )
+                        )
 
     return texts, tables, images
 
