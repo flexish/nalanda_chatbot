@@ -33,6 +33,13 @@ TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
 SUMMARIZE_CONCURRENCY = int(os.getenv("SUMMARIZE_CONCURRENCY", "3"))
 SUMMARIZE_TEXT = os.getenv("SUMMARIZE_TEXT", "true").lower() == "true"
 
+# Advanced RAG
+ENABLE_RERANKING = os.getenv("ENABLE_RERANKING", "true").lower() == "true"
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+ENABLE_WEB_SEARCH = os.getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
+WEB_SEARCH_MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+MAX_ITERATIVE_HOPS = int(os.getenv("MAX_ITERATIVE_HOPS", "1"))
+
 IMAGE_SUMMARY_PROMPT = os.getenv(
     "IMAGE_SUMMARY_PROMPT",
     "Describe the image in detail. For context, the image is part of documents about "

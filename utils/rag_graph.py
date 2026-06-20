@@ -18,11 +18,17 @@ from utils.config import (
     ANSWER_PROMPT_TEMPLATE,
     ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL,
+    ENABLE_RERANKING,
+    ENABLE_WEB_SEARCH,
     LLM_PROVIDER,
+    MAX_ITERATIVE_HOPS,
     OPENAI_API_KEY,
     OPENAI_MODEL,
+    RERANKER_MODEL,
     TOP_K,
+    WEB_SEARCH_MAX_RESULTS,
 )
+from utils.ingest import ParentDocument
 from utils.vectorstore import MultimodalVectorStore
 
 
@@ -31,6 +37,102 @@ def _build_llm() -> Any:
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
     return ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
+
+
+# ── Cross-encoder cache (loaded once per process) ─────────────────────────────
+_reranker_cache: dict[str, Any] = {}
+
+
+def _get_reranker():
+    if RERANKER_MODEL not in _reranker_cache:
+        from sentence_transformers import CrossEncoder
+        _reranker_cache[RERANKER_MODEL] = CrossEncoder(RERANKER_MODEL)
+    return _reranker_cache[RERANKER_MODEL]
+
+
+# ── Query rewriting + Multi-Query + HyDE ──────────────────────────────────────
+
+def _rewrite_and_expand_queries(llm: Any, question: str, chat_history: str) -> list[str]:
+    """Use LLM to generate rewritten query, alternative phrasing, and HyDE snippet."""
+    history_ctx = f"Chat history:\n{chat_history}\n\n" if chat_history else ""
+    prompt = (
+        f"{history_ctx}"
+        "You are a search query optimizer for a RAG system about Nalanda Mahavihara.\n\n"
+        f"User question: {question}\n\n"
+        "Generate 3 search inputs:\n"
+        "1. QUERY1: Rewrite the question as an optimized semantic search query (resolve pronouns using history if needed)\n"
+        "2. QUERY2: An alternative phrasing that might retrieve different relevant chunks\n"
+        "3. HYDE: A 1-2 sentence hypothetical answer snippet that would appear in a real document about this topic\n\n"
+        "Reply in this exact format:\n"
+        "QUERY1: <rewritten query>\n"
+        "QUERY2: <alternative phrasing>\n"
+        "HYDE: <hypothetical document snippet>"
+    )
+    try:
+        result = llm.invoke([HumanMessage(content=prompt)])
+        text = result.content if hasattr(result, "content") else str(result)
+        queries: list[str] = [question]
+        for line in text.splitlines():
+            line = line.strip()
+            for prefix in ("QUERY1:", "QUERY2:", "HYDE:"):
+                if line.startswith(prefix):
+                    q = line[len(prefix):].strip()
+                    if q and q not in queries:
+                        queries.append(q)
+        return queries
+    except Exception:
+        return [question]
+
+
+# ── Re-ranking ────────────────────────────────────────────────────────────────
+
+def _rerank_docs(question: str, docs: list[Any], top_n: int | None = None) -> list[Any]:
+    """Re-rank docs using a cross-encoder. Falls back silently if unavailable."""
+    if not docs or not ENABLE_RERANKING:
+        return docs
+    try:
+        reranker = _get_reranker()
+        pairs = [(question, _doc_content(doc)) for doc in docs if _doc_content(doc)]
+        if not pairs:
+            return docs
+        scores = reranker.predict(pairs)
+        ranked = sorted(zip(scores, docs), key=lambda x: x[0], reverse=True)
+        result = [doc for _, doc in ranked]
+        return result[:top_n] if top_n else result
+    except Exception:
+        return docs[:top_n] if top_n else docs
+
+
+# ── CRAG: retrieval quality check + web search fallback ───────────────────────
+
+def _retrieval_quality_score(docs: list[Any]) -> float:
+    """0-1 score based on total retrieved text length."""
+    if not docs:
+        return 0.0
+    total = sum(len(_doc_content(doc)) for doc in docs)
+    return min(1.0, total / 800)
+
+
+def _web_search(query: str) -> list[ParentDocument]:
+    """DuckDuckGo search returning results as ParentDocuments."""
+    if not ENABLE_WEB_SEARCH:
+        return []
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=WEB_SEARCH_MAX_RESULTS))
+        docs = []
+        for r in results:
+            snippet = f"{r.get('title', '')}: {r.get('body', '')}".strip()
+            if snippet:
+                docs.append(ParentDocument(
+                    text=snippet,
+                    metadata={"source": "web", "kind": "text", "url": r.get("href", "")},
+                    kind="text",
+                ))
+        return docs
+    except Exception:
+        return []
 
 
 class RAGState(TypedDict, total=False):
@@ -43,6 +145,7 @@ class RAGState(TypedDict, total=False):
     response: str
     verified: bool
     verification_reason: str
+    hops: int
 
 
 IMAGE_QUERY_HINTS = (
@@ -813,28 +916,55 @@ def _run_retrieve(
     question: str,
     chat_history: str,
     k: int,
+    llm: Any = None,
 ) -> dict[str, Any]:
-    retrieval_question = _retrieval_question(question, chat_history)
+    # 1. Query rewriting + multi-query + HyDE (via LLM)
+    if llm:
+        queries = _rewrite_and_expand_queries(llm, question, chat_history)
+    else:
+        queries = [_retrieval_question(question, chat_history)]
+    retrieval_question = queries[0]
 
+    # Image fast-path: keyword scan across all query variants
     if _is_image_request(question):
-        keyword_images = _select_images_by_keyword(store, retrieval_question)
-        if keyword_images:
-            limited_images = _limit_images(keyword_images, question)
-            images = [image_b64 for image_b64, _ in limited_images]
-            captions = [caption for _, caption in limited_images]
-            return {
-                "retrieved_docs": images,
-                "context": {"images": images, "texts": [], "image_captions": captions},
-                "mode": "image",
-                "retrieval_question": retrieval_question,
-            }
+        for q in queries:
+            keyword_images = _select_images_by_keyword(store, q)
+            if keyword_images:
+                limited_images = _limit_images(keyword_images, question)
+                images = [image_b64 for image_b64, _ in limited_images]
+                captions = [caption for _, caption in limited_images]
+                return {
+                    "retrieved_docs": images,
+                    "context": {"images": images, "texts": [], "image_captions": captions},
+                    "mode": "image",
+                    "retrieval_question": retrieval_question,
+                }
 
-    keyword_limit = 8 if _is_image_request(question) else 2
-    keyword_text_docs = _select_text_docs_by_keyword(store, retrieval_question, limit=keyword_limit)
-    semantic_text_docs = _select_best_text_docs(store, retrieval_question, k)
-    text_docs = _merge_docs(keyword_text_docs, semantic_text_docs, limit=max(3, k))
+    # 2. Multi-query text retrieval: keyword + semantic for every query variant
+    all_text_docs: list[Any] = []
+    seen_ids: set[str] = set()
+    for query in queries:
+        keyword_docs = _select_text_docs_by_keyword(store, query, limit=2)
+        semantic_docs = _select_best_text_docs(store, query, k)
+        for doc in keyword_docs + semantic_docs:
+            doc_id = str(_doc_metadata(doc).get("doc_id") or id(doc))
+            if doc_id not in seen_ids:
+                seen_ids.add(doc_id)
+                all_text_docs.append(doc)
+
+    # 3. Re-rank the merged pool with a cross-encoder
+    text_docs = _rerank_docs(question, all_text_docs, top_n=max(3, k))
+
+    # 4. CRAG: if retrieval quality is poor, augment with web search
+    if _retrieval_quality_score(text_docs) < 0.3:
+        web_docs = _web_search(retrieval_question)
+        for doc in web_docs:
+            doc_id = str(id(doc))
+            if doc_id not in seen_ids:
+                seen_ids.add(doc_id)
+                text_docs.append(doc)
+
     context = parse_docs(text_docs)
-
     text_sources = {
         str(getattr(doc, "metadata", {}).get("source", ""))
         for doc in text_docs
@@ -860,17 +990,18 @@ def _run_retrieve(
     if not best and _is_image_request(question):
         best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None, allow_weak=True)
     if not best and _is_image_request(question):
-        keyword_images = _select_images_by_keyword(store, retrieval_question, allowed_sources=text_sources or None)
-        if keyword_images:
-            limited_images = _limit_images(keyword_images, question)
-            images = [image_b64 for image_b64, _ in limited_images]
-            captions = [caption for _, caption in limited_images]
-            return {
-                "retrieved_docs": images,
-                "context": {"images": images, "texts": [], "image_captions": captions},
-                "mode": "image",
-                "retrieval_question": retrieval_question,
-            }
+        for q in queries:
+            keyword_images = _select_images_by_keyword(store, q, allowed_sources=text_sources or None)
+            if keyword_images:
+                limited_images = _limit_images(keyword_images, question)
+                images = [image_b64 for image_b64, _ in limited_images]
+                captions = [caption for _, caption in limited_images]
+                return {
+                    "retrieved_docs": images,
+                    "context": {"images": images, "texts": [], "image_captions": captions},
+                    "mode": "image",
+                    "retrieval_question": retrieval_question,
+                }
     if best:
         image_b64, caption = best
         if not context.get("texts"):
@@ -908,7 +1039,7 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
     llm = _build_llm()
 
     def retrieve_node(state: RAGState) -> dict[str, Any]:
-        return _run_retrieve(store, state["question"], state.get("chat_history", ""), k)
+        return _run_retrieve(store, state["question"], state.get("chat_history", ""), k, llm)
 
     def generate_node(state: RAGState) -> dict[str, str]:
         messages = build_multimodal_messages(
@@ -964,14 +1095,58 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
             "context": context,
         }
 
+    def iterate_node(state: RAGState) -> dict[str, Any]:
+        """Generate a refined query from the unverified answer, retrieve again, merge context."""
+        answer = state.get("response", "")
+        question = state["question"]
+        refine_prompt = (
+            f"The following RAG answer was flagged as unverified:\n"
+            f"Question: {question}\n"
+            f"Answer: {answer}\n\n"
+            "Generate a single refined search query to find better supporting evidence. "
+            "Reply with ONLY the search query, nothing else."
+        )
+        try:
+            res = llm.invoke([HumanMessage(content=refine_prompt)])
+            refined_query = (res.content if hasattr(res, "content") else str(res)).strip()
+        except Exception:
+            refined_query = question
+
+        new_retrieved = _run_retrieve(store, refined_query, question, k, llm)
+        old_ctx = state.get("context", {})
+        new_ctx = new_retrieved["context"]
+
+        old_ids = {str(_doc_metadata(d).get("doc_id") or id(d)) for d in old_ctx.get("texts", [])}
+        extra = [d for d in new_ctx.get("texts", []) if str(_doc_metadata(d).get("doc_id") or id(d)) not in old_ids]
+        merged_texts = (old_ctx.get("texts", []) + extra)[:k]
+
+        return {
+            "context": {
+                "texts": merged_texts,
+                "images": old_ctx.get("images") or new_ctx.get("images", []),
+                "image_captions": old_ctx.get("image_captions") or new_ctx.get("image_captions", []),
+            },
+            "hops": state.get("hops", 0) + 1,
+            "mode": state.get("mode", "text"),
+        }
+
+    def should_iterate(state: RAGState) -> str:
+        if state.get("mode") == "image":
+            return "end"
+        if not state.get("verified", True) and state.get("hops", 0) < MAX_ITERATIVE_HOPS:
+            return "iterate"
+        return "end"
+
     graph = StateGraph(RAGState)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("generate", generate_node)
     graph.add_node("verify", verify_node)
+    graph.add_node("iterate", iterate_node)
     graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "generate")
     graph.add_edge("generate", "verify")
-    graph.add_edge("verify", END)
+    graph.add_conditional_edges("verify", should_iterate, {"iterate": "iterate", "end": END})
+    graph.add_edge("iterate", "generate")
     return graph.compile()
 
 
@@ -1008,7 +1183,7 @@ async def astream_rag_response(
     k = top_k or TOP_K
     llm = _build_llm()
 
-    retrieved = await asyncio.to_thread(_run_retrieve, store, question, chat_history, k)
+    retrieved = await asyncio.to_thread(_run_retrieve, store, question, chat_history, k, llm)
     context = retrieved["context"]
     mode = retrieved.get("mode", "text")
     pre_verified = retrieved.get("verified")
