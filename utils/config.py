@@ -33,6 +33,11 @@ TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
 SUMMARIZE_CONCURRENCY = int(os.getenv("SUMMARIZE_CONCURRENCY", "3"))
 SUMMARIZE_TEXT = os.getenv("SUMMARIZE_TEXT", "true").lower() == "true"
 
+# PDF chunking (unstructured partition_pdf)
+CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "10000"))
+CHUNK_COMBINE_UNDER = int(os.getenv("CHUNK_COMBINE_UNDER", "2000"))
+CHUNK_NEW_AFTER = int(os.getenv("CHUNK_NEW_AFTER", "6000"))
+
 # Advanced RAG
 ENABLE_RERANKING = os.getenv("ENABLE_RERANKING", "true").lower() == "true"
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")

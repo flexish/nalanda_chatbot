@@ -129,32 +129,58 @@ class MultimodalVectorStore:
         source: str,
     ) -> int:
         doc_ids = [str(uuid.uuid4()) for _ in parents]
-        summary_docs = [
-            Document(page_content=summary, metadata={self.id_key: doc_ids[i], "source": source})
-            for i, summary in enumerate(summaries)
-        ]
+        summary_docs = []
+        for i, (parent, summary) in enumerate(zip(parents, summaries)):
+            page_num = parent.metadata.get("page_number") or parent.metadata.get("page_label")
+            summary_docs.append(Document(
+                page_content=summary,
+                metadata={
+                    self.id_key: doc_ids[i],
+                    "source": source,
+                    "kind": parent.kind,
+                    **({"page_number": page_num} if page_num is not None else {}),
+                },
+            ))
         self.retriever.vectorstore.add_documents(summary_docs)
         self.retriever.docstore.mset(list(zip(doc_ids, list(parents))))
         return len(parents)
 
     def _add_image_parents(
         self,
-        images_b64: Sequence[str],
+        images: Sequence[ParentDocument],
         summaries: Sequence[str],
         source: str,
     ) -> int:
-        doc_ids = [str(uuid.uuid4()) for _ in images_b64]
-        summary_docs = [
-            Document(page_content=summary, metadata={self.id_key: doc_ids[i], "source": source})
-            for i, summary in enumerate(summaries)
-        ]
+        doc_ids = [str(uuid.uuid4()) for _ in images]
+        summary_docs = []
+        image_parents = []
+        for i, (img, summary) in enumerate(zip(images, summaries)):
+            # img is always a ParentDocument; extract raw base64 and original metadata
+            b64 = img.text if isinstance(img, ParentDocument) else img
+            orig_meta = img.metadata if isinstance(img, ParentDocument) else {}
+            page_num = orig_meta.get("page_number") or orig_meta.get("page_label")
+            summary_docs.append(Document(
+                page_content=summary,
+                metadata={
+                    self.id_key: doc_ids[i],
+                    "source": source,
+                    "kind": "image",
+                    **({"page_number": page_num} if page_num is not None else {}),
+                },
+            ))
+            image_parents.append(ParentDocument(
+                text=b64,
+                metadata={
+                    **orig_meta,
+                    "kind": "image",
+                    self.id_key: doc_ids[i],
+                    "source": source,
+                },
+                kind="image",
+            ))
         self.retriever.vectorstore.add_documents(summary_docs)
-        image_parents = [
-            ParentDocument(text=image_b64, metadata={"kind": "image", self.id_key: doc_ids[i], "source": source}, kind="image")
-            for i, image_b64 in enumerate(images_b64)
-        ]
         self.retriever.docstore.mset(list(zip(doc_ids, image_parents)))
-        return len(images_b64)
+        return len(images)
 
     def index_folder(
         self,
@@ -165,8 +191,12 @@ class MultimodalVectorStore:
 
         totals = {"texts": 0, "tables": 0, "images": 0, "pdfs": 0}
         for ingested in ingest_folder(folder):
+            source = ingested.source
             if on_progress:
-                on_progress(f"Indexing {Path(ingested.source).name}...")
+                on_progress(f"Indexing {Path(source).name}...")
+            removed = self.remove_source(source)
+            if removed and on_progress:
+                on_progress(f"  Replaced {removed} existing entries for {Path(source).name}")
             counts = self.add_ingested(ingested, on_progress)
             totals["pdfs"] += 1
             for k in ("texts", "tables", "images"):

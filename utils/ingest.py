@@ -18,6 +18,21 @@ from typing import Any, Iterator, List
 
 from utils.tesseract_setup import configure_tesseract
 
+import re
+
+
+def _clean_text(text: str) -> str:
+    """Remove common PDF/OCR artifacts from extracted text."""
+    # Fix hyphenated line-breaks: "discov-\nery" → "discovery"
+    text = re.sub(r"-\s*\n\s*([a-z])", r"\1", text)
+    # Collapse runs of blank lines to a single blank line
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    # Normalize repeated spaces
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    # Strip form-feed characters (page breaks embedded in text)
+    text = text.replace("\x0c", "")
+    return text.strip()
+
 
 @dataclass
 class ParentDocument:
@@ -48,6 +63,7 @@ def _element_metadata(el: Any) -> dict[str, Any]:
 def partition_pdf_file(pdf_path: str | Path) -> list:
     configure_tesseract()
     from unstructured.partition.pdf import partition_pdf
+    from utils.config import CHUNK_MAX_CHARS, CHUNK_COMBINE_UNDER, CHUNK_NEW_AFTER
 
     return partition_pdf(
         filename=str(pdf_path),
@@ -56,9 +72,9 @@ def partition_pdf_file(pdf_path: str | Path) -> list:
         extract_image_block_types=["Image"],
         extract_image_block_to_payload=True,
         chunking_strategy="by_title",
-        max_characters=10000,
-        combine_text_under_n_chars=2000,
-        new_after_n_chars=6000,
+        max_characters=CHUNK_MAX_CHARS,
+        combine_text_under_n_chars=CHUNK_COMBINE_UNDER,
+        new_after_n_chars=CHUNK_NEW_AFTER,
     )
 
 
@@ -72,7 +88,7 @@ def extract_from_chunks(chunks: list, source: str) -> tuple[list[ParentDocument]
         if chunk_type == "Table":
             tables.append(
                 ParentDocument(
-                    text=getattr(chunk, "text", "") or "",
+                    text=_clean_text(getattr(chunk, "text", "") or ""),
                     metadata={**_element_metadata(chunk), "source": source, "kind": "table"},
                     kind="table",
                 )
@@ -80,7 +96,7 @@ def extract_from_chunks(chunks: list, source: str) -> tuple[list[ParentDocument]
         elif chunk_type == "CompositeElement":
             texts.append(
                 ParentDocument(
-                    text=getattr(chunk, "text", "") or "",
+                    text=_clean_text(getattr(chunk, "text", "") or ""),
                     metadata={**_element_metadata(chunk), "source": source, "kind": "text"},
                     kind="text",
                 )
