@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nalanda — Archaeological Knowledge Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,500&family=Inter:wght@300;400;500;600&family=Noto+Serif+Devanagari:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     AUTH SCREEN  (login + signup)
+     Place your Nalanda ruins photo at web/static/nalanda-hero.jpg
+     to activate the 3D parallax background.
+═══════════════════════════════════════════════════════ -->
+<div id="authScreen" class="screen">
+
+  <!-- 3D Parallax layers -->
+  <div id="pBg"  class="p-layer p-bg"></div>
+  <div id="pMid" class="p-layer p-mid"></div>
+  <div id="pDust" class="p-layer p-dust"></div>
+
+  <!-- Colour tint bands (sky, horizon, ground) -->
+  <div class="scene-tint"></div>
+
+  <!-- Floating particles injected by JS -->
+  <div id="particles" class="particles"></div>
+
+  <!-- Auth container: login ↔ signup slide -->
+  <div class="auth-stage" id="authStage">
+
+    <!-- ── LOGIN CARD ── -->
+    <div class="auth-card" id="loginCard">
+      <div class="card-glow"></div>
+
+      <div class="card-ornament" aria-hidden="true">
+        <!-- Ashoka Chakra (24-spoke wheel) simplified -->
+        <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="40" cy="40" r="36" stroke="currentColor" stroke-width="1.2" opacity=".5"/>
+          <circle cx="40" cy="40" r="10" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="40" cy="40" r="3"  fill="currentColor" opacity=".8"/>
+          <!-- 12 main spokes -->
+          <line x1="40" y1="4"   x2="40" y2="30" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="40" y1="50"  x2="40" y2="76" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="4"  y1="40"  x2="30" y2="40" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="50" y1="40"  x2="76" y2="40" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="11" y1="11"  x2="29" y2="29" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="51" y1="51"  x2="69" y2="69" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="69" y1="11"  x2="51" y2="29" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="29" y1="51"  x2="11" y2="69" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="22" y1="5.4" x2="30" y2="20"  stroke="currentColor" stroke-width=".9" opacity=".6"/>
+          <line x1="58" y1="5.4" x2="50" y2="20"  stroke="currentColor" stroke-width=".9" opacity=".6"/>
+          <line x1="74.6" y1="22" x2="60" y2="30" stroke="currentColor" stroke-width=".9" opacity=".6"/>
+          <line x1="74.6" y1="58" x2="60" y2="50" stroke="currentColor" stroke-width=".9" opacity=".6"/>
+        </svg>
+      </div>
+
+      <p class="card-deva">नालंदा</p>
+      <h1 class="card-title">Nalanda Knowledge</h1>
+      <p class="card-sub">Ancient Wisdom · Modern Intelligence</p>
+
+      <form id="loginForm" class="auth-form" novalidate>
+        <div class="field-wrap">
+          <input type="text" id="loginUser" placeholder=" " autocomplete="username" required />
+          <label for="loginUser">Username</label>
+        </div>
+        <div class="field-wrap">
+          <input type="password" id="loginPass" placeholder=" " autocomplete="current-password" required />
+          <label for="loginPass">Password</label>
+        </div>
+        <p id="loginError" class="form-msg form-err" hidden></p>
+        <button type="submit" id="loginBtn" class="btn-auth">
+          <span>Enter the Library</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </form>
+
+      <div class="auth-switch">
+        <span>New to Nalanda?</span>
+        <button class="link-btn" id="goSignup">Create an account</button>
+      </div>
+
+      <footer class="card-footer">
+        <span>UNESCO World Heritage</span><span class="dot">·</span>
+        <span>Rajgir, Bihar</span><span class="dot">·</span>
+        <span>5th – 12th Century CE</span>
+      </footer>
+    </div><!-- /#loginCard -->
+
+    <!-- ── SIGNUP CARD ── -->
+    <div class="auth-card auth-card-right" id="signupCard">
+      <div class="card-glow"></div>
+
+      <div class="card-ornament" aria-hidden="true">
+        <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Lotus simplified -->
+          <ellipse cx="40" cy="50" rx="10" ry="24" fill="currentColor" opacity=".18" transform="rotate(-30 40 50)"/>
+          <ellipse cx="40" cy="50" rx="10" ry="24" fill="currentColor" opacity=".18"/>
+          <ellipse cx="40" cy="50" rx="10" ry="24" fill="currentColor" opacity=".18" transform="rotate(30 40 50)"/>
+          <ellipse cx="40" cy="50" rx="10" ry="24" fill="currentColor" opacity=".12" transform="rotate(-60 40 50)"/>
+          <ellipse cx="40" cy="50" rx="10" ry="24" fill="currentColor" opacity=".12" transform="rotate(60 40 50)"/>
+          <circle cx="40" cy="44" r="9" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="40" cy="44" r="3" fill="currentColor" opacity=".7"/>
+        </svg>
+      </div>
+
+      <p class="card-deva">स्वागतम्</p>
+      <h1 class="card-title">Create Account</h1>
+      <p class="card-sub">Join the Nalanda Knowledge System</p>
+
+      <form id="signupForm" class="auth-form" novalidate>
+        <div class="field-wrap">
+          <input type="text" id="signupUser" placeholder=" " autocomplete="username" required />
+          <label for="signupUser">Username</label>
+        </div>
+        <div class="field-wrap">
+          <input type="email" id="signupEmail" placeholder=" " autocomplete="email" required />
+          <label for="signupEmail">Email address</label>
+        </div>
+        <div class="field-wrap">
+          <input type="password" id="signupPass" placeholder=" " autocomplete="new-password" required />
+          <label for="signupPass">Password (min 6 chars)</label>
+        </div>
+        <div class="field-wrap">
+          <input type="password" id="signupPassC" placeholder=" " autocomplete="new-password" required />
+          <label for="signupPassC">Confirm password</label>
+        </div>
+        <p id="signupMsg" class="form-msg" hidden></p>
+        <button type="submit" id="signupBtn" class="btn-auth">
+          <span>Create Account</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM19 8v6M22 11h-6"/></svg>
+        </button>
+      </form>
+
+      <div class="auth-switch">
+        <span>Already have an account?</span>
+        <button class="link-btn" id="goLogin">Sign in</button>
+      </div>
+
+      <footer class="card-footer">
+        <span>Your role will be <strong>User</strong> by default.</span>
+      </footer>
+    </div><!-- /#signupCard -->
+
+  </div><!-- /.auth-stage -->
+</div><!-- /#authScreen -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN APP
+═══════════════════════════════════════════════════════ -->
+<div id="appScreen" class="screen hidden">
+
+  <!-- ── Top Header ── -->
+  <header class="app-header">
+    <div class="brand">
+      <svg class="brand-wheel" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="20" cy="20" r="5"  stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="20" cy="20" r="2"  fill="currentColor"/>
+        <line x1="20" y1="3"  x2="20" y2="15" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="20" y1="25" x2="20" y2="37" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="3"  y1="20" x2="15" y2="20" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="25" y1="20" x2="37" y2="20" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="7.5" y1="7.5"  x2="16" y2="16" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="24"  y1="24"   x2="32.5" y2="32.5" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="32.5" y1="7.5" x2="24"   y2="16"   stroke="currentColor" stroke-width="1.6"/>
+        <line x1="16"   y1="24"  x2="7.5"  y2="32.5" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-deva">नालंदा</span>
+        <span class="brand-name">Nalanda</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="user-pill">
+        <div class="user-avatar" id="userAvatar"></div>
+        <span id="userDisplay" class="user-name"></span>
+        <span id="roleDisplay" class="role-badge"></span>
+      </div>
+      <button id="adminToggleBtn" class="btn-manage hidden">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        Manage
+      </button>
+      <button id="logoutBtn" class="btn-logout">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Body ── -->
+  <div class="app-body">
+
+    <!-- ── Admin Sidebar ── -->
+    <aside id="adminPanel" class="admin-panel" aria-hidden="true">
+      <div class="panel-header">
+        <h2>Knowledge Base</h2>
+        <button id="closePanelBtn" class="btn-icon" title="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Tabs: Knowledge | Users -->
+      <div class="panel-tabs">
+        <button class="ptab active" data-tab="knowledge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          Knowledge
+        </button>
+        <button class="ptab" data-tab="users">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          Users
+        </button>
+      </div>
+
+      <div class="panel-body">
+
+        <!-- ── KNOWLEDGE TAB ── -->
+        <div id="tabKnowledge" class="tab-pane active">
+
+          <section class="panel-section">
+            <h3 class="section-title">Index Statistics</h3>
+            <div class="stats-row">
+              <div class="stat-box">
+                <span id="statVectors" class="stat-num">—</span>
+                <span class="stat-lbl">Summary Vectors</span>
+              </div>
+              <div class="stat-box">
+                <span id="statDocs" class="stat-num">—</span>
+                <span class="stat-lbl">Docstore Entries</span>
+              </div>
+            </div>
+            <button id="refreshStatsBtn" class="btn-sm">↻ Refresh</button>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Upload PDF</h3>
+            <div class="upload-zone" id="uploadZone" role="button" tabindex="0">
+              <input type="file" id="pdfFileInput" accept=".pdf" multiple hidden />
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              <p>Drop PDF or <span class="link-look">browse</span></p>
+              <small>Multiple files supported</small>
+            </div>
+            <div id="uploadStatus" class="upload-status hidden"></div>
+          </section>
+
+          <section class="panel-section">
+            <h3 class="section-title">Index Documents</h3>
+            <div class="radio-group">
+              <label class="radio-opt"><input type="radio" name="indexMode" value="single" checked /><span>Single PDF</span></label>
+              <label class="radio-opt"><input type="radio" name="indexMode" value="folder" /><span>Entire folder</span></label>
+            </div>
+            <div id="pdfSelectWrap">
+              <select id="pdfSelect" class="select-field"><option value="">— select a PDF —</option></select>
+            </div>
+            <div id="folderWarnWrap" class="hidden">
+              <p class="warn-box">⚠ Full-folder indexing uses hi-res extraction and can take several minutes per file.</p>
+            </div>
+            <details class="path-details">
+              <summary>Advanced paths</summary>
+              <div class="field-wrap mt8"><input type="text" id="vstorePath" placeholder=" " /><label>Vector store path</label></div>
+              <div class="field-wrap mt8"><input type="text" id="dataFolderPath" placeholder=" " /><label>Data folder</label></div>
+            </details>
+            <button id="indexBtn" class="btn-primary full">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              Build / Update Index
+            </button>
+            <div id="indexProgress" class="progress-panel hidden">
+              <div id="progressLog" class="progress-log"></div>
+            </div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-title-row">
+              <h3 class="section-title">Available PDFs</h3>
+              <button id="refreshPdfsBtn" class="btn-icon-sm" title="Refresh">↻</button>
+            </div>
+            <div id="pdfList" class="pdf-list"><p class="muted-text">Loading…</p></div>
+          </section>
+
+          <section class="panel-section danger-section">
+            <h3 class="section-title danger-title">Danger Zone</h3>
+            <button id="clearIndexBtn" class="btn-danger full">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+              Clear Entire Index
+            </button>
+            <p class="danger-note">Permanently deletes all vectors. Cannot be undone.</p>
+          </section>
+        </div><!-- /#tabKnowledge -->
+
+        <!-- ── USERS TAB ── -->
+        <div id="tabUsers" class="tab-pane hidden">
+          <section class="panel-section">
+            <div class="section-title-row">
+              <h3 class="section-title">Registered Users</h3>
+              <button id="refreshUsersBtn" class="btn-icon-sm" title="Refresh">↻</button>
+            </div>
+            <div id="userList" class="user-list"><p class="muted-text">Loading…</p></div>
+          </section>
+        </div><!-- /#tabUsers -->
+
+      </div><!-- /.panel-body -->
+    </aside><!-- /#adminPanel -->
+
+    <!-- ── Main Content ── -->
+    <main class="main-content" id="mainContent">
+
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-img-layer"></div>
+        <div class="hero-gradient"></div>
+        <div class="hero-inner">
+          <div class="hero-text">
+            <p class="hero-eyebrow">5th–12th Century CE &nbsp;·&nbsp; Bihar, India</p>
+            <p class="hero-deva">नालंदा महाविहार</p>
+            <h2 class="hero-title">Nalanda Mahavihara</h2>
+            <p class="hero-desc">
+              One of the greatest universities of the ancient world — drawing
+              scholars from Tibet, China, Korea, Persia and beyond for over
+              700 years. UNESCO World Heritage Site since 2016.
+            </p>
+            <div class="hero-tags">
+              <span class="tag">Archaeology</span>
+              <span class="tag">Buddhist Heritage</span>
+              <span class="tag">Architecture</span>
+              <span class="tag">Sculptures &amp; Art</span>
+              <span class="tag">Conservation</span>
+              <span class="tag">UNESCO</span>
+            </div>
+          </div>
+          <div class="hero-facts">
+            <div class="hfact"><strong>10,000+</strong><span>Students at Peak</span></div>
+            <div class="hfact"><strong>2,000+</strong><span>Resident Teachers</span></div>
+            <div class="hfact"><strong>9 Million</strong><span>Manuscripts (est.)</span></div>
+            <div class="hfact"><strong>700 yrs</strong><span>Active University</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Chat -->
+      <section class="chat-section">
+        <div class="chat-toolbar">
+          <h3 class="chat-title">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            Ask Nalanda
+          </h3>
+          <div class="chat-tools">
+            <span id="verifiedBadge" class="verified-badge hidden"></span>
+            <button id="clearChatBtn" class="btn-ghost-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div id="chatMessages" class="chat-messages" role="log" aria-live="polite"></div>
+
+        <div id="thinkingRow" class="thinking-row hidden">
+          <div class="msg-avatar asst-av">N</div>
+          <div class="thinking-dots"><span></span><span></span><span></span></div>
+          <span class="thinking-label">Consulting ancient records…</span>
+        </div>
+
+        <form id="chatForm" class="chat-form" novalidate>
+          <div class="input-area">
+            <textarea id="chatInput" placeholder="Ask about Nalanda Mahavihara — history, monuments, sculptures, scholars…" rows="2" maxlength="1000"></textarea>
+            <button type="submit" id="sendBtn" class="btn-send" title="Send (Ctrl+Enter)" disabled>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2L15 22 11 13 2 9l20-7z"/></svg>
+            </button>
+          </div>
+          <div class="form-foot">
+            <label class="topk-label"><span>Results</span><input type="number" id="topK" value="4" min="1" max="12" /></label>
+            <span id="charCount" class="char-count">0 / 1000</span>
+          </div>
+        </form>
+
+        <div id="suggestions" class="suggestions">
+          <p class="sug-label">Try asking:</p>
+          <div class="chips">
+            <button class="chip">What is the history of Nalanda?</button>
+            <button class="chip">Show images of the main stupa</button>
+            <button class="chip">What sculptures were found at Nalanda?</button>
+            <button class="chip">Describe the architecture of Nalanda</button>
+            <button class="chip">When was Nalanda inscribed as UNESCO Heritage?</button>
+            <button class="chip">Who were the famous scholars of Nalanda?</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div><!-- /.app-body -->
+</div><!-- /#appScreen -->
+
+
+<!-- Templates -->
+<template id="msgTpl">
+  <div class="msg">
+    <div class="msg-avatar"></div>
+    <div class="msg-body">
+      <div class="msg-text"></div>
+      <div class="msg-images"></div>
+      <div class="msg-meta"></div>
+    </div>
+  </div>
+</template>
+
+<template id="userRowTpl">
+  <div class="user-row">
+    <div class="user-row-av"></div>
+    <div class="user-row-info">
+      <span class="user-row-name"></span>
+      <span class="user-row-email"></span>
+    </div>
+    <span class="user-row-badge"></span>
+    <div class="user-row-actions"></div>
+  </div>
+</template>
+
+<!-- Confirm dialog -->
+<div id="confirmOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true">
+  <div class="confirm-card">
+    <h3 id="confirmTitle"></h3>
+    <p  id="confirmMsg"></p>
+    <div class="confirm-btns">
+      <button id="confirmOk"     class="btn-danger">Confirm</button>
+      <button id="confirmCancel" class="btn-ghost-sm">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/app.js" type="module"></script>
+</body>
+</html>
