@@ -939,6 +939,46 @@ textarea#chatInput::placeholder { color: var(--text-muted); }
 }
 .chip:hover { background: rgba(200,90,24,.06); border-color: var(--saffron); color: var(--saffron); }
 
+/* ── Admin: Web URL Source chips ──────────────────────────────────────────── */
+
+.url-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.url-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--white); border: 1px solid var(--border-str);
+  border-radius: 99px; padding: 3px 8px 3px 10px;
+  font-size: .76rem; color: var(--earth); max-width: 260px;
+}
+.url-chip-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 190px;
+}
+.url-chip-remove {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 1rem; line-height: 1;
+  padding: 0 2px; transition: color var(--dur);
+}
+.url-chip-remove:hover { color: #c0392b; }
+.url-input-row {
+  display: flex; gap: 7px; align-items: center;
+}
+.url-input {
+  flex: 1; font-size: .82rem;
+  border: 1px solid var(--border-med); border-radius: 8px;
+  padding: 6px 10px; background: var(--white); color: var(--ink);
+  outline: none; transition: border-color var(--dur);
+}
+.url-input:focus { border-color: var(--saffron); }
+.btn-url-add {
+  font-size: .78rem; font-weight: 600;
+  padding: 6px 13px; border-radius: 8px;
+  background: var(--saffron); color: #fff; border: none;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--dur);
+}
+.btn-url-add:hover { background: var(--saffron-dk); }
+
 /* ── Confirm dialog ───────────────────────────────────────────────────────── */
 
 .confirm-overlay {

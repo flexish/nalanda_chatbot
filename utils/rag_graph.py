@@ -146,6 +146,7 @@ class RAGState(TypedDict, total=False):
     verified: bool
     verification_reason: str
     hops: int
+    web_docs: list[Any]  # admin-configured URL content injected directly into LLM prompt
 
 
 IMAGE_QUERY_HINTS = (
@@ -882,6 +883,7 @@ def build_multimodal_messages(
     context: dict[str, list[Any]],
     question: str,
     chat_history: str = "",
+    web_docs: list[Any] | None = None,
 ) -> list[HumanMessage]:
     context_text = ""
     for text_element in context.get("texts", []):
@@ -894,6 +896,22 @@ def build_multimodal_messages(
         context_text=context_text,
         question=question,
     )
+
+    # Inject admin-configured URL content directly into the prompt (ChatGPT/Claude browsing style).
+    # URL content bypasses vector search — it is always included and the LLM reasons over it directly.
+    if web_docs:
+        web_sections: list[str] = []
+        for doc in web_docs:
+            src = (_doc_metadata(doc).get("source") or "web")
+            text = (_doc_content(doc) or "").strip()
+            if text:
+                web_sections.append(f"[{src}]\n{text}")
+        if web_sections:
+            prompt_template += (
+                "\n\n---\nAdditional web sources (admin-configured URLs):\n\n"
+                + "\n\n".join(web_sections)
+            )
+
     if chat_history:
         prompt_template = (
             "Conversation history for resolving follow-up references only:\n"
@@ -1046,6 +1064,7 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
             state["context"],
             state["question"],
             state.get("chat_history", ""),
+            web_docs=state.get("web_docs") or None,
         )
         result = llm.invoke(messages)
         content = result.content if hasattr(result, "content") else str(result)
@@ -1155,10 +1174,15 @@ def query_with_sources(
     question: str,
     top_k: int | None = None,
     chat_history: str = "",
+    web_docs: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Invoke graph and return response + parsed context (notebook chain_with_sources shape)."""
     graph = create_rag_graph(store, top_k=top_k)
-    result = graph.invoke({"question": question, "chat_history": chat_history})
+    result = graph.invoke({
+        "question": question,
+        "chat_history": chat_history,
+        "web_docs": web_docs or [],
+    })
     context = _apply_requested_image_limit(result.get("context", {"texts": [], "images": []}), question)
     return {
         "question": question,
@@ -1176,6 +1200,7 @@ async def astream_rag_response(
     question: str,
     top_k: int | None = None,
     chat_history: str = "",
+    web_docs: list[Any] | None = None,
 ):
     """Async generator: yields {type:'token', content:'...'} chunks then a final {type:'done', ...} event."""
     import asyncio
@@ -1198,7 +1223,7 @@ async def astream_rag_response(
         }
         return
 
-    messages = build_multimodal_messages(context, question, chat_history)
+    messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs)
     full_response = ""
 
     async for chunk in llm.astream(messages):

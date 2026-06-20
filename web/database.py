@@ -45,6 +45,15 @@ def init_db() -> None:
                 created_at    TEXT    NOT NULL
             )
         """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS url_sources (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                url        TEXT    UNIQUE NOT NULL,
+                label      TEXT    NOT NULL DEFAULT '',
+                added_by   TEXT    NOT NULL DEFAULT 'admin',
+                added_at   TEXT    NOT NULL
+            )
+        """)
         c.commit()
 
 
@@ -129,3 +138,39 @@ def delete_user(user_id: int) -> None:
     with _conn() as c:
         c.execute("DELETE FROM users WHERE id=?", (user_id,))
         c.commit()
+
+
+# ── URL Sources ───────────────────────────────────────────────────────────────
+
+def list_url_sources() -> list[dict]:
+    with _conn() as c:
+        return [
+            dict(r) for r in c.execute(
+                "SELECT id, url, label, added_by, added_at FROM url_sources ORDER BY id"
+            ).fetchall()
+        ]
+
+
+def url_source_exists(url: str) -> bool:
+    with _conn() as c:
+        return bool(c.execute("SELECT 1 FROM url_sources WHERE url=?", (url,)).fetchone())
+
+
+def add_url_source(url: str, label: str = "", added_by: str = "admin") -> int:
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO url_sources (url, label, added_by, added_at) VALUES (?,?,?,?)",
+            (url, label, added_by, _now()),
+        )
+        c.commit()
+        return cur.lastrowid
+
+
+def delete_url_source(url_id: int) -> str | None:
+    """Delete a URL source by id. Returns the URL string if found, else None."""
+    with _conn() as c:
+        row = c.execute("SELECT url FROM url_sources WHERE id=?", (url_id,)).fetchone()
+        url = row["url"] if row else None
+        c.execute("DELETE FROM url_sources WHERE id=?", (url_id,))
+        c.commit()
+    return url

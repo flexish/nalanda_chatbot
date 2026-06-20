@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nalanda Multimodal Agentic RAG –  Documentation</title>
+<style>
+  /* ── Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: #1a1a2e;
+    background: #fff;
+  }
+
+  /* ── Cover Page ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(135deg, #1A0A02 0%, #2E1508 55%, #8C3D0C 100%);
+    color: #FDF8EC;
+    padding: 60px 40px;
+    page-break-after: always;
+  }
+  .cover-logo {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(232,184,60,.9) 0%, rgba(140,61,12,.6) 70%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; margin: 0 auto 28px;
+    box-shadow: 0 0 32px rgba(212,148,30,.35);
+  }
+  .cover h1 { font-size: 34px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 12px; color: #FDF8EC; }
+  .cover h2 { font-size: 18px; font-weight: 400; color: #C4A878; margin-bottom: 40px; }
+  .cover-meta { font-size: 13px; color: #A07850; line-height: 2; }
+  .cover-meta strong { color: #E8B83C; }
+  .cover-divider {
+    width: 60px; height: 3px;
+    background: linear-gradient(90deg, #D4941E, #8C3D0C);
+    margin: 30px auto;
+    border-radius: 2px;
+  }
+  .cover-badge {
+    display: inline-block;
+    background: rgba(212,148,30,0.15);
+    border: 1px solid rgba(212,148,30,0.5);
+    color: #E8B83C;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 5px 16px;
+    border-radius: 20px;
+    margin-bottom: 24px;
+  }
+  .cover-institute {
+    margin-top: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .cover-institute img {
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 6px;
+    box-shadow: 0 0 24px rgba(212,148,30,.25);
+    object-fit: contain;
+  }
+  .cover-institute-name {
+    font-size: 12px;
+    color: #C4A878;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── TOC ── */
+  .toc-page {
+    padding: 60px 80px;
+    page-break-after: always;
+    min-height: 100vh;
+  }
+  .toc-page h2 { font-size: 24px; color: #0f3460; margin-bottom: 28px; border-bottom: 2px solid #e94560; padding-bottom: 10px; }
+  .toc-list { list-style: none; }
+  .toc-list li { display: flex; align-items: baseline; gap: 0; padding: 5px 0; font-size: 13.5px; }
+  .toc-list li .toc-num { color: #e94560; font-weight: 700; min-width: 36px; }
+  .toc-list li .toc-title { flex: 1; color: #1a1a2e; }
+  .toc-list li .toc-dots { flex: 1; border-bottom: 1px dotted #ccc; margin: 0 8px; position: relative; top: -4px; }
+  .toc-list li .toc-page-num { color: #0f3460; font-weight: 600; font-size: 12px; }
+  .toc-sub { padding-left: 24px; font-size: 13px; color: #555; }
+  .toc-sub .toc-num { color: #888; font-weight: 500; }
+
+  /* ── Content ── */
+  .page { padding: 60px 80px; max-width: 960px; margin: 0 auto; }
+  .page-break { page-break-before: always; }
+
+  /* ── Section headings ── */
+  .section-header {
+    background: linear-gradient(135deg, #0f3460, #16213e);
+    color: #fff;
+    padding: 20px 32px;
+    border-radius: 8px;
+    margin-bottom: 28px;
+  }
+  .section-header .section-num { font-size: 13px; color: #a8b2d8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+  .section-header h2 { font-size: 22px; font-weight: 700; }
+
+  h3 { font-size: 16px; color: #0f3460; margin: 28px 0 10px; padding-left: 10px; border-left: 3px solid #e94560; }
+  h4 { font-size: 14px; color: #16213e; margin: 18px 0 8px; font-weight: 600; }
+  p { margin-bottom: 12px; color: #2d2d44; }
+
+  /* ── Cards ── */
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+  .card-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 18px 0; }
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .card-icon { font-size: 22px; margin-bottom: 8px; }
+  .card h4 { color: #0f3460; margin: 0 0 6px; font-size: 14px; }
+  .card p { font-size: 12.5px; color: #555; margin: 0; }
+  .card-accent { border-left: 3px solid #e94560; }
+  .card-blue { border-left: 3px solid #0f3460; }
+  .card-green { border-left: 3px solid #10b981; }
+  .card-purple { border-left: 3px solid #8b5cf6; }
+  .card-orange { border-left: 3px solid #f59e0b; }
+
+  /* ── Tech table ── */
+  .tech-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 13px; }
+  .tech-table th {
+    background: #0f3460; color: #fff;
+    padding: 10px 14px; text-align: left; font-weight: 600;
+  }
+  .tech-table th:first-child { border-radius: 6px 0 0 0; }
+  .tech-table th:last-child { border-radius: 0 6px 0 0; }
+  .tech-table td { padding: 10px 14px; border-bottom: 1px solid #e8ecf0; vertical-align: top; }
+  .tech-table tr:nth-child(even) td { background: #f8fafc; }
+  .tech-table tr:last-child td { border-bottom: none; }
+  .tech-badge {
+    display: inline-block;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  /* ── Pipeline flow ── */
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-items: center;
+    margin: 20px 0;
+  }
+  .pipeline-step {
+    background: #0f3460;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 110px;
+  }
+  .pipeline-step span { display: block; font-size: 10px; font-weight: 400; color: #a8b2d8; margin-top: 2px; }
+  .pipeline-arrow {
+    color: #e94560;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 0 6px;
+  }
+  .pipeline-step.highlight { background: #e94560; }
+  .pipeline-step.highlight span { color: #fca5a5; }
+  .pipeline-step.green-step { background: #065f46; }
+  .pipeline-step.green-step span { color: #6ee7b7; }
+
+  /* ── Feature list ── */
+  .feature-list { list-style: none; margin: 12px 0; }
+  .feature-list li {
+    padding: 8px 0 8px 28px;
+    position: relative;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+    color: #2d2d44;
+  }
+  .feature-list li:last-child { border-bottom: none; }
+  .feature-list li::before {
+    content: '✓';
+    position: absolute;
+    left: 4px;
+    color: #10b981;
+    font-weight: 700;
+  }
+
+  /* ── Info box ── */
+  .info-box {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    padding: 14px 18px;
+    border-radius: 0 6px 6px 0;
+    margin: 16px 0;
+    font-size: 13px;
+    color: #1e40af;
+  }
+  .warn-box {
+    background: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    padding: 14px 18px;
+    border-radius: 0 6px 6px 0;
+    margin: 16px 0;
+    font-size: 13px;
+    color: #92400e;
+  }
+
+  /* ── API table ── */
+  .api-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 12.5px; }
+  .api-table th { background: #16213e; color: #fff; padding: 9px 12px; text-align: left; }
+  .api-table td { padding: 9px 12px; border-bottom: 1px solid #e8ecf0; vertical-align: top; }
+  .api-table tr:nth-child(even) td { background: #f8fafc; }
+  .method { font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px; }
+  .method.get  { background: #dcfce7; color: #166534; }
+  .method.post { background: #dbeafe; color: #1e3a8a; }
+  .method.del  { background: #fee2e2; color: #991b1b; }
+  .method.patch{ background: #fef3c7; color: #92400e; }
+  .role-admin { background: #fce7f3; color: #9d174d; font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+  .role-user  { background: #ede9fe; color: #4c1d95; font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+  .role-pub   { background: #e0f2fe; color: #0c4a6e; font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+
+  /* ── Config table ── */
+  .config-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 12.5px; }
+  .config-table th { background: #0f3460; color: #fff; padding: 9px 12px; text-align: left; }
+  .config-table td { padding: 9px 12px; border-bottom: 1px solid #e8ecf0; vertical-align: top; font-family: 'Courier New', monospace; font-size: 12px; }
+  .config-table td:first-child { color: #7c3aed; }
+  .config-table td:nth-child(2) { font-family: inherit; color: #1a1a2e; }
+  .config-table td:nth-child(3) { color: #2d6a4f; }
+  .config-table tr:nth-child(even) td { background: #f8fafc; }
+
+  /* ── Glossary ── */
+  .glossary dt { font-weight: 700; color: #0f3460; margin-top: 14px; }
+  .glossary dd { margin-left: 20px; color: #444; font-size: 13px; }
+
+  /* ── Footer ── */
+  .doc-footer {
+    text-align: center;
+    color: #999;
+    font-size: 11px;
+    padding: 30px;
+    border-top: 1px solid #eee;
+    margin-top: 40px;
+  }
+
+  /* ── Print ── */
+  @media print {
+    .cover { min-height: 100vh; page-break-after: always; }
+    .toc-page { page-break-after: always; }
+    .page-break { page-break-before: always; }
+    .card-grid { grid-template-columns: 1fr 1fr; }
+    .card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    body { font-size: 12px; }
+    .page { padding: 40px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">🏛️</div>
+  <div class="cover-badge"> Documentation</div>
+  <h1>Nalanda Multimodal<br>Agentic RAG System</h1>
+  <h2>Intelligent Document Intelligence Platform</h2>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">
+    <div><strong>Document Type:</strong> Technical & Functional Overview</div>
+    <div><strong>Date:</strong> June 2026</div>
+    <div><strong>Classification:</strong> Confidential</div>
+  </div>
+  <div class="cover-institute">
+    <img src="iit_patna_logo.png" alt="IIT Patna Logo" />
+    <div class="cover-institute-name">Indian Institute of Technology Patna</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+══════════════════════════════════════════════════════════════ -->
+<div class="toc-page">
+  <h2>Table of Contents</h2>
+  <ul class="toc-list">
+    <li><span class="toc-num">1.</span><span class="toc-title">Executive Summary</span><span class="toc-dots"></span><span class="toc-page-num">3</span></li>
+    <li><span class="toc-num">2.</span><span class="toc-title">System Architecture</span><span class="toc-dots"></span><span class="toc-page-num">4</span></li>
+    <li><span class="toc-num">3.</span><span class="toc-title">Technology Stack</span><span class="toc-dots"></span><span class="toc-page-num">5</span></li>
+    <li class="toc-sub"><span class="toc-num">3.1</span><span class="toc-title">Backend & AI/ML</span><span class="toc-dots"></span><span class="toc-page-num">5</span></li>
+    <li class="toc-sub"><span class="toc-num">3.2</span><span class="toc-title">Frontend & API</span><span class="toc-dots"></span><span class="toc-page-num">5</span></li>
+    <li class="toc-sub"><span class="toc-num">3.3</span><span class="toc-title">Storage & Persistence</span><span class="toc-dots"></span><span class="toc-page-num">6</span></li>
+    <li><span class="toc-num">4.</span><span class="toc-title">Document Ingestion Pipeline</span><span class="toc-dots"></span><span class="toc-page-num">7</span></li>
+    <li class="toc-sub"><span class="toc-num">4.1</span><span class="toc-title">PDF Parsing & OCR</span><span class="toc-dots"></span><span class="toc-page-num">7</span></li>
+    <li class="toc-sub"><span class="toc-num">4.2</span><span class="toc-title">Text Cleaning</span><span class="toc-dots"></span><span class="toc-page-num">7</span></li>
+    <li class="toc-sub"><span class="toc-num">4.3</span><span class="toc-title">Summarization & Embedding</span><span class="toc-dots"></span><span class="toc-page-num">7</span></li>
+    <li class="toc-sub"><span class="toc-num">4.4</span><span class="toc-title">Multi-Vector Storage</span><span class="toc-dots"></span><span class="toc-page-num">8</span></li>
+    <li><span class="toc-num">5.</span><span class="toc-title">Retrieval Augmented Generation (RAG) Pipeline</span><span class="toc-dots"></span><span class="toc-page-num">9</span></li>
+    <li class="toc-sub"><span class="toc-num">5.1</span><span class="toc-title">Query Rewriting</span><span class="toc-dots"></span><span class="toc-page-num">9</span></li>
+    <li class="toc-sub"><span class="toc-num">5.2</span><span class="toc-title">Multi-Query Retrieval</span><span class="toc-dots"></span><span class="toc-page-num">9</span></li>
+    <li class="toc-sub"><span class="toc-num">5.3</span><span class="toc-title">HyDE (Hypothetical Document Embeddings)</span><span class="toc-dots"></span><span class="toc-page-num">9</span></li>
+    <li class="toc-sub"><span class="toc-num">5.4</span><span class="toc-title">Re-Ranking</span><span class="toc-dots"></span><span class="toc-page-num">10</span></li>
+    <li class="toc-sub"><span class="toc-num">5.5</span><span class="toc-title">CRAG – Web Search Fallback</span><span class="toc-dots"></span><span class="toc-page-num">10</span></li>
+    <li class="toc-sub"><span class="toc-num">5.6</span><span class="toc-title">Self-RAG Verification</span><span class="toc-dots"></span><span class="toc-page-num">10</span></li>
+    <li class="toc-sub"><span class="toc-num">5.7</span><span class="toc-title">Iterative Retrieval</span><span class="toc-dots"></span><span class="toc-page-num">10</span></li>
+    <li><span class="toc-num">6.</span><span class="toc-title">Multimodal Capabilities</span><span class="toc-dots"></span><span class="toc-page-num">11</span></li>
+    <li><span class="toc-num">7.</span><span class="toc-title">Real-Time Streaming</span><span class="toc-dots"></span><span class="toc-page-num">12</span></li>
+    <li><span class="toc-num">8.</span><span class="toc-title">Chat Memory & Session Context</span><span class="toc-dots"></span><span class="toc-page-num">12</span></li>
+    <li><span class="toc-num">9.</span><span class="toc-title">Web Interface – User Features</span><span class="toc-dots"></span><span class="toc-page-num">13</span></li>
+    <li><span class="toc-num">10.</span><span class="toc-title">Web Interface – Admin Features</span><span class="toc-dots"></span><span class="toc-page-num">14</span></li>
+    <li class="toc-sub"><span class="toc-num">10.1</span><span class="toc-title">Admin Panel UI Element Reference (every field explained)</span><span class="toc-dots"></span><span class="toc-page-num">14</span></li>
+    <li class="toc-sub"><span class="toc-num">10.2</span><span class="toc-title">What the Statistics Numbers Mean in Practice</span><span class="toc-dots"></span><span class="toc-page-num">15</span></li>
+    <li class="toc-sub"><span class="toc-num">10.3</span><span class="toc-title">Web URL Sources — ChatGPT/Claude Browsing Approach</span><span class="toc-dots"></span><span class="toc-page-num">15</span></li>
+    <li><span class="toc-num">11.</span><span class="toc-title">Authentication & Security</span><span class="toc-dots"></span><span class="toc-page-num">16</span></li>
+    <li><span class="toc-num">12.</span><span class="toc-title">API Reference</span><span class="toc-dots"></span><span class="toc-page-num">16</span></li>
+    <li><span class="toc-num">13.</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page-num">17</span></li>
+    <li><span class="toc-num">14.</span><span class="toc-title">LLM Provider Switching</span><span class="toc-dots"></span><span class="toc-page-num">18</span></li>
+    <li><span class="toc-num">15.</span><span class="toc-title">Glossary (RAG, Chunks, Storage, Security, Admin UI terms)</span><span class="toc-dots"></span><span class="toc-page-num">20</span></li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 1 – EXECUTIVE SUMMARY
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 01</div>
+    <h2>Executive Summary</h2>
+  </div>
+
+  <p>The <strong>Nalanda Multimodal Agentic RAG System</strong> is an enterprise-grade, AI-powered document intelligence platform built specifically for the Nalanda Mahavihara archaeological knowledge base. It enables users to query large collections of PDF documents — including scanned books, excavation reports, conservation records, and research papers — using natural language and receive accurate, cited, and verified answers in real time.</p>
+
+  <p>Unlike a standard chatbot, this system uses an <strong>Agentic RAG (Retrieval-Augmented Generation)</strong> pipeline that actively retrieves evidence from your documents before generating any answer, verifies the answer against that evidence, and can automatically retry with a refined search if the first attempt is insufficient. It also understands and retrieves <strong>images, photographs, maps, and figures</strong> embedded in PDFs — making it truly multimodal.</p>
+
+  <div class="card-grid">
+    <div class="card card-accent">
+      <div class="card-icon">🎯</div>
+      <h4>Purpose</h4>
+      <p>Give researchers, historians, and administrators instant, accurate answers from thousands of pages of Nalanda-related documents without manual searching.</p>
+    </div>
+    <div class="card card-blue">
+      <div class="card-icon">🔒</div>
+      <h4>Access Control</h4>
+      <p>Role-based access: regular users can chat, admins can upload documents, manage the knowledge base, and manage user accounts.</p>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">⚡</div>
+      <h4>Real-Time</h4>
+      <p>Answers stream word-by-word as the AI generates them, providing immediate feedback without waiting for the full response.</p>
+    </div>
+    <div class="card card-purple">
+      <div class="card-icon">🧠</div>
+      <h4>Self-Verifying</h4>
+      <p>Every answer is automatically checked for factual grounding. Unverified answers are flagged with a visible warning badge.</p>
+    </div>
+  </div>
+
+  <h3>Key Differentiators</h3>
+  <ul class="feature-list">
+    <li>Answers come <strong>only</strong> from your uploaded documents — no hallucinated facts from general AI training data</li>
+    <li>Understands <strong>follow-up questions</strong> using conversation history (e.g., "Tell me more about it")</li>
+    <li>Retrieves <strong>images and photographs</strong> from PDFs and displays them alongside text answers</li>
+    <li>Uses <strong>7 advanced RAG techniques</strong> stacked together for maximum retrieval accuracy</li>
+    <li>Admins can register <strong>web URL sources</strong> — page content is fetched fresh at query time and given directly to the AI alongside PDF context, exactly like ChatGPT or Claude browsing</li>
+    <li>Fully configurable via environment variables — switch LLM providers, tune chunk sizes, enable web search, all without code changes</li>
+    <li>Built on open standards — all APIs are REST/SSE, no vendor lock-in for the interface layer</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 2 – SYSTEM ARCHITECTURE
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 02</div>
+    <h2>System Architecture</h2>
+  </div>
+
+  <p>The system is composed of four layers that work together from document ingestion through to the user's chat interface.</p>
+
+  <h3>Architecture Layers</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <div class="card-icon">📄</div>
+      <h4>Layer 1 — Ingestion Layer</h4>
+      <p>PDF files are parsed using Unstructured + Tesseract OCR. Text, tables, and images are extracted, cleaned, and summarized by an LLM. Summaries are embedded and stored in ChromaDB; full content is stored in a docstore.</p>
+    </div>
+    <div class="card card-blue">
+      <div class="card-icon">🔍</div>
+      <h4>Layer 2 — Retrieval Layer</h4>
+      <p>User questions go through query rewriting, multi-query expansion, and HyDE before retrieval. Results from keyword + semantic search are merged, deduplicated, and re-ranked by a cross-encoder model.</p>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">🤖</div>
+      <h4>Layer 3 — Generation & Verification Layer</h4>
+      <p>Retrieved context is sent to the LLM (GPT-4o or Claude) to generate an answer. A second LLM call verifies the answer is grounded in the retrieved text. If not, an iterative retrieval hop is triggered.</p>
+    </div>
+    <div class="card card-purple">
+      <div class="card-icon">🌐</div>
+      <h4>Layer 4 — Presentation Layer</h4>
+      <p>FastAPI serves a REST + SSE API. The frontend (vanilla HTML/JS/CSS) renders streamed tokens, images, verification badges, and manages user sessions and admin controls.</p>
+    </div>
+  </div>
+
+  <h3>Data Flow — End to End</h3>
+  <div class="pipeline">
+    <div class="pipeline-step">User Question<span>Browser</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">FastAPI<span>POST /api/chat/stream</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step highlight">Query Rewriting<span>LLM call</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Multi-Retrieve<span>Chroma + Keyword</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step highlight">Re-Rank<span>Cross-Encoder</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Fetch URLs<span>Admin sources (1-hr cache)</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Generate<span>PDFs + Web → LLM</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step green-step">Verify<span>Self-RAG</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">SSE Stream<span>Browser</span></div>
+  </div>
+
+  <h3>Deployment</h3>
+  <p>The system runs as a single Python process (FastAPI with Uvicorn). The frontend is served as static files from the same server. No separate frontend build step or Node.js is required. ChromaDB and the docstore are file-based and stored locally on the server.</p>
+
+  <div class="info-box">
+    <strong>Single-server deployment:</strong> The entire system — API, frontend, vector database, and docstore — runs on one machine. For production scale, ChromaDB can be replaced with a hosted vector database and the FastAPI app can be containerized with Docker.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 3 – TECHNOLOGY STACK
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 03</div>
+    <h2>Technology Stack</h2>
+  </div>
+
+  <h3>3.1 Backend & AI / ML</h3>
+  <table class="tech-table">
+    <thead>
+      <tr><th>Technology</th><th>Version</th><th>Used For</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Python</strong></td><td>3.10+</td><td>Primary backend language for all server-side logic, ingestion, and AI orchestration</td></tr>
+      <tr><td><strong>FastAPI</strong></td><td>≥ 0.111</td><td>REST API server — handles chat, admin, upload, authentication, and SSE streaming endpoints</td></tr>
+      <tr><td><strong>LangChain</strong></td><td>≥ 0.3</td><td>Core framework for building RAG chains, prompt templates, document loaders, and LLM wrappers</td></tr>
+      <tr><td><strong>LangGraph</strong></td><td>≥ 0.2</td><td>Graph-based state machine that orchestrates the Retrieve → Generate → Verify → Iterate pipeline as a directed graph with conditional edges</td></tr>
+      <tr><td><strong>OpenAI GPT-4o</strong></td><td>API</td><td>Primary LLM for answer generation, query rewriting, multi-query expansion, HyDE, self-RAG verification, and iterative retrieval</td></tr>
+      <tr><td><strong>Anthropic Claude</strong></td><td>API (optional)</td><td>Alternative LLM provider — switchable via environment variable with no code changes</td></tr>
+      <tr><td><strong>Groq (LLaMA)</strong></td><td>API (optional)</td><td>Fast inference alternative for text summarization during ingestion</td></tr>
+      <tr><td><strong>OpenAI text-embedding-3-small</strong></td><td>API</td><td>Converts text and query summaries into vector embeddings for semantic similarity search</td></tr>
+      <tr><td><strong>sentence-transformers</strong></td><td>≥ 3.0</td><td>Provides the cross-encoder re-ranking model (ms-marco-MiniLM-L-6-v2) and optional HuggingFace embedding backend</td></tr>
+      <tr><td><strong>Unstructured</strong></td><td>≥ 0.16</td><td>High-resolution PDF parsing — extracts text blocks, tables, and embedded images from complex multi-column PDFs</td></tr>
+      <tr><td><strong>Tesseract OCR</strong></td><td>5.x</td><td>Optical Character Recognition for scanned/image-based PDFs where text is not machine-readable</td></tr>
+      <tr><td><strong>Pillow (PIL)</strong></td><td>≥ 10</td><td>Image decoding and validation — verifies extracted base64 images are renderable before storing or returning them</td></tr>
+      <tr><td><strong>duckduckgo-search</strong></td><td>≥ 6.0</td><td>CRAG (Corrective RAG) web search fallback — triggered automatically when document retrieval quality is poor</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 Frontend & API Layer</h3>
+  <table class="tech-table">
+    <thead>
+      <tr><th>Technology</th><th>Used For</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>HTML5 / CSS3 / Vanilla JavaScript</strong></td><td>Entire frontend UI — no framework dependency (React, Vue, etc. not required), minimizing bundle size and complexity</td></tr>
+      <tr><td><strong>Server-Sent Events (SSE)</strong></td><td>Real-time token streaming from the server to the browser — the AI's answer appears word-by-word as it is generated</td></tr>
+      <tr><td><strong>Fetch API (browser)</strong></td><td>All API calls from the frontend to the backend — uploads, chat, admin operations</td></tr>
+      <tr><td><strong>FormData API</strong></td><td>PDF file uploads with drag-and-drop support from the admin panel</td></tr>
+      <tr><td><strong>Uvicorn</strong></td><td>ASGI server that runs FastAPI and handles async SSE connections efficiently</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 Storage & Persistence</h3>
+  <table class="tech-table">
+    <thead>
+      <tr><th>Technology</th><th>Used For</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>ChromaDB</strong></td><td>Vector database — stores LLM-generated summaries as embeddings for semantic similarity search. Backed by SQLite on disk.</td></tr>
+      <tr><td><strong>SQLite (via ChromaDB)</strong></td><td>Underlying storage engine for ChromaDB — all vector embeddings, metadata, and collection info stored in <code>chroma.sqlite3</code></td></tr>
+      <tr><td><strong>Pickle (docstore.pkl)</strong></td><td>Persistent key-value store for full parent documents (original text chunks, tables, base64 images) linked to vector summaries by UUID</td></tr>
+      <tr><td><strong>SQLite (nalanda_users.db)</strong></td><td>User authentication database — stores usernames, hashed passwords, email, role (admin/user), and active status. Also stores admin-configured web URL sources in a separate <code>url_sources</code> table.</td></tr>
+      <tr><td><strong>PBKDF2-SHA256</strong></td><td>Password hashing — all passwords are hashed with PBKDF2-HMAC-SHA256 (260,000 iterations) and a per-user random salt before storage; plain-text passwords are never stored</td></tr>
+      <tr><td><strong>In-process URL cache (1-hour TTL)</strong></td><td>Admin-configured web page content is cached in server memory for 1 hour after first fetch — subsequent queries within the hour read from cache with no network round trip</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 4 – DOCUMENT INGESTION PIPELINE
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 04</div>
+    <h2>Document Ingestion Pipeline</h2>
+  </div>
+
+  <p>Ingestion is the process of reading PDF files, extracting their content, and building the knowledge base that the AI will later search. This is a one-time process per document (or re-run when documents are updated).</p>
+
+  <div class="pipeline" style="flex-wrap:wrap; gap:8px;">
+    <div class="pipeline-step">PDF Upload<span>Browser / Folder</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Parse PDF<span>Unstructured hi_res</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">OCR<span>Tesseract</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Extract<span>Text / Tables / Images</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step highlight">Clean Text<span>Hyphen / whitespace</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Summarize<span>LLM / GPT-4o</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Embed<span>text-embedding-3-small</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step green-step">Store<span>ChromaDB + docstore</span></div>
+  </div>
+
+  <h3>4.1 PDF Parsing & OCR</h3>
+  <p><strong>Unstructured</strong> (with <code>strategy="hi_res"</code>) processes each PDF page using computer vision to accurately detect text columns, table boundaries, and embedded images — even in complex multi-column layouts common in academic papers and archaeological reports.</p>
+  <p><strong>Tesseract OCR</strong> is applied to scanned pages where text is rendered as an image rather than machine-readable characters. This ensures documents like old survey reports or photographed manuscripts are also searchable.</p>
+  <p>The chunking strategy is <strong>"by_title"</strong> — content is split at section headings rather than at arbitrary character limits, preserving semantic meaning within each chunk. Configurable parameters:</p>
+  <ul class="feature-list">
+    <li><strong>CHUNK_MAX_CHARS</strong> — maximum characters per chunk (default: 10,000)</li>
+    <li><strong>CHUNK_COMBINE_UNDER</strong> — merge adjacent chunks smaller than this (default: 2,000)</li>
+    <li><strong>CHUNK_NEW_AFTER</strong> — start a new chunk after this many characters (default: 6,000)</li>
+  </ul>
+
+  <h3>4.2 Text Cleaning</h3>
+  <p>Raw PDF text contains artifacts that hurt search quality. The system automatically cleans:</p>
+  <ul class="feature-list">
+    <li><strong>Hyphenated line-breaks</strong> — "discov-\nery" is joined back to "discovery" so the complete word is searchable</li>
+    <li><strong>Excessive blank lines</strong> — 3+ consecutive newlines collapsed to one paragraph break</li>
+    <li><strong>Repeated spaces</strong> — multiple spaces/tabs normalized to single space</li>
+    <li><strong>Form-feed characters</strong> — page-break control characters (0x0C) removed</li>
+  </ul>
+
+  <h3>4.3 Summarization & Embedding</h3>
+  <p>Rather than embedding raw text chunks directly (which would make long chunks difficult to match against short user queries), the system uses the <strong>Multi-Vector Retriever</strong> pattern:</p>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <h4>Summary stored in ChromaDB (searchable)</h4>
+      <p>The LLM generates a concise summary of each chunk. This summary is embedded using OpenAI's <code>text-embedding-3-small</code> and stored as a vector in ChromaDB. User queries are matched against these summaries.</p>
+    </div>
+    <div class="card card-blue">
+      <h4>Full content stored in docstore (returned)</h4>
+      <p>The original full-length text, table HTML, or base64 image is stored separately in <code>docstore.pkl</code>. When a summary matches a query, the full parent document is fetched and sent to the LLM as context.</p>
+    </div>
+  </div>
+  <p>Image summaries are generated using <strong>GPT-4o's vision capability</strong> — the image is base64-encoded and sent to the LLM which describes what it shows in the context of Nalanda Mahavihara.</p>
+
+  <h3>4.4 Multi-Vector Storage</h3>
+  <p>Every stored entry carries rich metadata in both ChromaDB and the docstore:</p>
+  <ul class="feature-list">
+    <li><strong>source</strong> — path to the originating PDF file</li>
+    <li><strong>kind</strong> — document type: <code>text</code>, <code>table</code>, or <code>image</code></li>
+    <li><strong>page_number</strong> — PDF page where this chunk originated (used for proximity-based image retrieval)</li>
+    <li><strong>doc_id</strong> — UUID linking the summary vector to its parent document</li>
+  </ul>
+
+  <div class="warn-box">
+    <strong>Re-indexing:</strong> If the same PDF is indexed again (e.g., after an update), the system automatically removes all existing entries for that file before adding new ones — preventing duplicate chunks in the knowledge base.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 5 – RAG PIPELINE
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 05</div>
+    <h2>Retrieval Augmented Generation (RAG) Pipeline</h2>
+  </div>
+
+  <p>The RAG pipeline is the core intelligence of the system. It transforms a user's question into a high-quality, evidence-backed answer through 7 stacked advanced techniques, orchestrated as a <strong>LangGraph state machine</strong>.</p>
+
+  <h3>5.1 Query Rewriting</h3>
+  <p>Before any retrieval, the user's question is sent to the LLM for rewriting. This serves two purposes:</p>
+  <ul class="feature-list">
+    <li><strong>Pronoun resolution</strong> — "Tell me more about it" becomes "Tell me more about Nalanda's excavation history" using the conversation history</li>
+    <li><strong>Search optimization</strong> — colloquial questions are rephrased into terminology more likely to appear in academic documents (e.g., "Who built it?" → "Nalanda Mahavihara founder construction history")</li>
+  </ul>
+  <p><strong>Technology:</strong> OpenAI GPT-4o / Anthropic Claude via LangChain's <code>ChatOpenAI</code> / <code>ChatAnthropic</code></p>
+
+  <h3>5.2 Multi-Query Retrieval</h3>
+  <p>Instead of running one search, the system generates <strong>3 query variants</strong> and runs retrieval for each:</p>
+  <div class="card-grid-3">
+    <div class="card card-accent">
+      <h4>Query 1 — Rewritten</h4>
+      <p>The optimized rewrite of the original question (from §5.1).</p>
+    </div>
+    <div class="card card-blue">
+      <h4>Query 2 — Alternative</h4>
+      <p>A different phrasing likely to retrieve different relevant document chunks.</p>
+    </div>
+    <div class="card card-purple">
+      <h4>Query 3 — HyDE</h4>
+      <p>A hypothetical answer snippet (see §5.3) used as a search query.</p>
+    </div>
+  </div>
+  <p>Results from all three queries are merged with deduplication — if the same document chunk appears in multiple results, it is included only once.</p>
+  <p><strong>Technology:</strong> LangChain + ChromaDB <code>similarity_search_with_relevance_scores</code> + in-memory keyword scanning</p>
+
+  <h3>5.3 HyDE — Hypothetical Document Embeddings</h3>
+  <p>HyDE is a technique that improves semantic retrieval by searching with an <em>answer</em> instead of a <em>question</em>. The LLM generates a hypothetical 1-2 sentence passage that would appear in a real document answering the question. This hypothetical passage is then embedded and used for vector search.</p>
+  <p><strong>Why this helps:</strong> In embedding space, a hypothetical answer is closer to real document passages than the question itself — because both are written in the same "answer" style. This retrieves relevant chunks that a plain question embedding would miss.</p>
+  <p><strong>Technology:</strong> OpenAI GPT-4o generates the hypothesis; <code>text-embedding-3-small</code> embeds it; ChromaDB finds nearest neighbors</p>
+
+  <h3>5.4 Re-Ranking (Cross-Encoder)</h3>
+  <p>After multi-query retrieval, the merged candidate documents are <strong>re-ranked</strong> using a cross-encoder model. Unlike the embedding-based retrieval (which encodes query and document separately), the cross-encoder reads the <em>question and document together</em> to produce a much more accurate relevance score.</p>
+  <p><strong>Model used:</strong> <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code> — a lightweight, fast cross-encoder trained on MS MARCO passage ranking. Runs locally on CPU; no API cost.</p>
+  <p>The top-K documents after re-ranking are kept and passed to the LLM for answer generation.</p>
+
+  <h3>5.5 CRAG — Corrective RAG / Web Search Fallback</h3>
+  <p>After re-ranking, the system scores the <strong>quality of retrieved documents</strong>. If the total retrieved text volume is below a threshold (suggesting the question is not covered by the indexed documents), it automatically triggers a <strong>DuckDuckGo web search</strong> and adds the top results as additional context.</p>
+  <p>This is controlled by the <code>ENABLE_WEB_SEARCH</code> environment variable (off by default). When enabled, the system seamlessly augments local document knowledge with live web information.</p>
+  <p><strong>Technology:</strong> <code>duckduckgo-search</code> Python library</p>
+
+  <h3>5.6 Self-RAG Verification</h3>
+  <p>After the LLM generates an answer, a <strong>second LLM call</strong> acts as a quality checker. It reads the retrieved context, the question, and the generated answer, then answers two questions:</p>
+  <ul class="feature-list">
+    <li><strong>GROUNDED: yes/no</strong> — Is the answer supported by the retrieved document context?</li>
+    <li><strong>KEEP_IMAGE: yes/no</strong> — Is the retrieved image actually relevant to the question asked?</li>
+    <li><strong>REASON</strong> — One sentence explaining the judgment</li>
+  </ul>
+  <p>If <code>GROUNDED: no</code>, the answer is flagged with a <em>"may not be supported"</em> note visible to the user. If <code>KEEP_IMAGE: no</code>, the image is removed from the response.</p>
+
+  <h3>5.7 Iterative Retrieval</h3>
+  <p>If an answer is flagged as unverified and the system has not yet reached the maximum hop limit (<code>MAX_ITERATIVE_HOPS</code>, default: 1), the LangGraph pipeline routes to an <strong>iterate node</strong> instead of ending:</p>
+  <div class="pipeline">
+    <div class="pipeline-step">Unverified Answer<span>verify node</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step highlight">Generate Refined Query<span>LLM</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Retrieve Again<span>all 7 techniques</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Merge Context<span>old + new</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Re-Generate<span>LLM</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step green-step">Re-Verify<span>Self-RAG</span></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Final Answer</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 6 – MULTIMODAL
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 06</div>
+    <h2>Multimodal Capabilities</h2>
+  </div>
+
+  <p>The system handles not just text but also tables and images embedded in PDFs, making it fully multimodal.</p>
+
+  <div class="card-grid-3">
+    <div class="card card-accent">
+      <div class="card-icon">📝</div>
+      <h4>Text Chunks</h4>
+      <p>Paragraphs and sections extracted from PDFs. Summarized by LLM, embedded, and stored. Retrieved semantically and by keyword overlap.</p>
+    </div>
+    <div class="card card-blue">
+      <div class="card-icon">📊</div>
+      <h4>Tables</h4>
+      <p>Tables extracted with HTML structure preserved. Summarized by LLM so their content is semantically searchable even when the question doesn't match table headers exactly.</p>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">🖼️</div>
+      <h4>Images</h4>
+      <p>Photographs, maps, diagrams, and figures extracted as base64. GPT-4o Vision describes them in Nalanda context. Retrieved by semantic caption matching or page proximity to relevant text.</p>
+    </div>
+  </div>
+
+  <h3>Image Retrieval Strategy (4-tier)</h3>
+  <p>When a user asks an image-related question ("show me", "display", "photo of"), the system attempts image retrieval in order of confidence:</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>Tier 1 — Keyword Image Scan</h4>
+      <p>Scans all image captions and source filenames for exact token matches with the question. Highest precision — returns images whose captions directly mention the query entities.</p>
+    </div>
+    <div class="card">
+      <h4>Tier 2 — Page Proximity</h4>
+      <p>Finds images on the same page (±2 pages) as the best-matching text chunks. Uses the text's page_number metadata stored during ingestion. Very reliable for figures referenced in text.</p>
+    </div>
+    <div class="card">
+      <h4>Tier 3 — Semantic Caption Search</h4>
+      <p>Runs semantic similarity search over image captions using the query embedding. Finds conceptually related images even when exact words don't match.</p>
+    </div>
+    <div class="card">
+      <h4>Tier 4 — Weak Semantic Fallback</h4>
+      <p>Lowers the relevance threshold for a final attempt. Used only when the previous three tiers return nothing. Prevents completely empty image responses.</p>
+    </div>
+  </div>
+
+  <h3>Image Validity Check</h3>
+  <p>Every image is validated as a renderable image (using Pillow's <code>Image.verify()</code>) before it is stored or returned. Corrupted or partial extractions are silently discarded, ensuring only clean images reach the user's browser.</p>
+
+  <h3>Requested Image Limit</h3>
+  <p>Users can request a specific number of images in their question ("show me 3 images of the stupa", "show all images of the excavation"). The system parses the number from the question and applies it as a limit on the images returned. Defaults to a maximum of 6 images per response to avoid overloading the interface.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 7 – STREAMING
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 07</div>
+    <h2>Real-Time Streaming</h2>
+  </div>
+
+  <p>Rather than waiting for the full answer to be generated (which can take 5-15 seconds for long responses), the system streams the answer to the browser <strong>token by token</strong> as the LLM generates it — similar to how ChatGPT displays its responses.</p>
+
+  <h3>How Streaming Works</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <h4>1. SSE Connection</h4>
+      <p>The browser opens a <strong>Server-Sent Events</strong> connection to <code>POST /api/chat/stream</code>. This is a long-lived HTTP connection that the server pushes events through.</p>
+    </div>
+    <div class="card card-blue">
+      <h4>2. Token Events</h4>
+      <p>Each word/token the LLM generates is sent as a JSON event: <code>{"type":"token","content":"..."}</code>. The browser appends it to the answer bubble in real time.</p>
+    </div>
+    <div class="card card-green">
+      <h4>3. Done Event</h4>
+      <p>When generation is complete, a final event <code>{"type":"done",...}</code> carries images, captions, verification status, and the complete answer. Images appear after the text finishes.</p>
+    </div>
+    <div class="card card-purple">
+      <h4>4. Error Event</h4>
+      <p>If any error occurs mid-stream, an <code>{"type":"error"}</code> event is sent and the connection closes gracefully. The user sees the error inline in the chat.</p>
+    </div>
+  </div>
+
+  <h3>Technical Implementation</h3>
+  <ul class="feature-list">
+    <li><strong>Server:</strong> FastAPI <code>StreamingResponse</code> with <code>media_type="text/event-stream"</code> and <code>Cache-Control: no-cache</code> headers</li>
+    <li><strong>LLM streaming:</strong> LangChain's <code>llm.astream(messages)</code> async generator — yields one <code>AIMessageChunk</code> per token</li>
+    <li><strong>Retrieval in async context:</strong> Synchronous retrieval functions run in a thread pool via <code>asyncio.to_thread()</code> so they don't block the async event loop</li>
+    <li><strong>Browser:</strong> Native <code>ReadableStream</code> API reads the SSE connection; no external library needed</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 8 – CHAT MEMORY
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 08</div>
+    <h2>Chat Memory &amp; Session Context</h2>
+  </div>
+
+  <p>The system maintains conversation history within a session, enabling natural multi-turn conversations where users can ask follow-up questions without repeating context.</p>
+
+  <h3>How Memory Works</h3>
+  <ul class="feature-list">
+    <li>The browser maintains a <code>chatHistory</code> array of all messages in the current session</li>
+    <li>Every API request includes the last <strong>4 turns</strong> (8 messages: 4 user + 4 assistant) of history</li>
+    <li>History is capped at <strong>1,800 characters</strong> to fit within LLM context limits without wasting tokens on old conversation</li>
+    <li>The query rewriting step (§5.1) uses this history to resolve pronouns and follow-up references before retrieval</li>
+  </ul>
+
+  <h3>Example Multi-Turn Conversation</h3>
+  <div class="card" style="font-size:13px;">
+    <p><strong>User:</strong> When was Nalanda Mahavihara established?</p>
+    <p><strong>AI:</strong> Nalanda Mahavihara was established in the 5th century CE during the Gupta period...</p>
+    <br>
+    <p><strong>User:</strong> Who were its most famous scholars?</p>
+    <p style="color:#888; font-size:12px;">[System rewrites to: "Famous scholars of Nalanda Mahavihara 5th century CE Gupta period"]</p>
+    <p><strong>AI:</strong> Among the most renowned scholars at Nalanda were Nagarjuna, Aryabhata, Dharmakirti...</p>
+    <br>
+    <p><strong>User:</strong> Tell me more about the last one</p>
+    <p style="color:#888; font-size:12px;">[System rewrites to: "Dharmakirti Buddhist philosopher Nalanda contributions"]</p>
+    <p><strong>AI:</strong> Dharmakirti was a 7th-century Buddhist logician and epistemologist...</p>
+  </div>
+
+  <div class="info-box">
+    <strong>Session scope:</strong> Chat history is stored in the browser's memory for the current session only. It is not persisted to a database — refreshing the page starts a fresh conversation. This is intentional for privacy and simplicity.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 9 – USER FEATURES
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 09</div>
+    <h2>Web Interface – User Features</h2>
+  </div>
+
+  <p>Regular (non-admin) users have access to the chat interface after logging in. The interface is clean, responsive, and works in any modern web browser.</p>
+
+  <h3>Authentication</h3>
+  <ul class="feature-list">
+    <li><strong>Login</strong> — username and password. A session token is returned and stored in browser memory (not localStorage — cleared on tab close for security)</li>
+    <li><strong>Sign Up</strong> — self-registration with username, email, and password. Accounts are created with <code>user</code> role and require no admin approval</li>
+    <li><strong>Logout</strong> — invalidates the server-side session token immediately</li>
+  </ul>
+
+  <h3>Chat Interface</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <div class="card-icon">💬</div>
+      <h4>Natural Language Questions</h4>
+      <p>Type any question about Nalanda in plain English. Submit with Enter or the send button.</p>
+    </div>
+    <div class="card card-blue">
+      <div class="card-icon">⚡</div>
+      <h4>Streaming Answers</h4>
+      <p>The answer appears word by word. A blinking cursor shows the AI is still generating.</p>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">🖼️</div>
+      <h4>Inline Images</h4>
+      <p>Relevant photographs, maps, and figures from the PDFs appear below the text answer with descriptive captions.</p>
+    </div>
+    <div class="card card-purple">
+      <div class="card-icon">✅</div>
+      <h4>Verification Badge</h4>
+      <p>A green "Verified" or yellow "Unverified" badge shows whether the answer is grounded in the document evidence.</p>
+    </div>
+    <div class="card card-orange">
+      <div class="card-icon">🔄</div>
+      <h4>Conversation Memory</h4>
+      <p>Ask follow-up questions — the AI remembers what was discussed earlier in the session.</p>
+    </div>
+    <div class="card card-accent">
+      <div class="card-icon">🏛️</div>
+      <h4>Image Requests</h4>
+      <p>Ask specifically for images: "Show me photos of the main stupa" or "Display 3 images of the excavation".</p>
+    </div>
+  </div>
+
+  <h3>What Users Cannot Do</h3>
+  <ul class="feature-list">
+    <li>Upload documents — upload is restricted to admins only</li>
+    <li>View or manage other users' accounts</li>
+    <li>Clear or rebuild the knowledge base index</li>
+    <li>Access admin statistics or system configuration</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 10 – ADMIN FEATURES
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 10</div>
+    <h2>Web Interface – Admin Features</h2>
+  </div>
+
+  <p>Admin users have all user capabilities plus a dedicated <strong>Admin Panel</strong> tab in the web interface with full control over the knowledge base and user management.</p>
+
+  <h3>Knowledge Base Management</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <div class="card-icon">⬆️</div>
+      <h4>Upload PDF</h4>
+      <p>Drag and drop or click to select PDF files from your local machine. Files are uploaded to the server's data folder instantly. Multiple files can be uploaded in one operation.</p>
+    </div>
+    <div class="card card-blue">
+      <div class="card-icon">⚙️</div>
+      <h4>Index Single PDF</h4>
+      <p>After uploading, select a specific PDF from the dropdown and click Index. Only that file is processed — useful for adding one document without re-processing everything.</p>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">📂</div>
+      <h4>Index Entire Folder</h4>
+      <p>Process all PDFs in the data folder at once. The system automatically removes existing entries for each file before re-indexing to prevent duplicates.</p>
+    </div>
+    <div class="card card-purple">
+      <div class="card-icon">🗑️</div>
+      <h4>Clear Entire Index</h4>
+      <p>Wipes all vectors and stored documents from the knowledge base. Requires confirmation. Use before a full re-index from scratch.</p>
+    </div>
+  </div>
+
+  <h3>Indexing Progress</h3>
+  <p>All indexing operations run as <strong>background jobs</strong>. A live log panel shows real-time progress messages:</p>
+  <ul class="feature-list">
+    <li>Each PDF file being processed</li>
+    <li>How many text chunks, tables, and images were extracted</li>
+    <li>Summarization progress (e.g., "Summarizing 24 text chunks...")</li>
+    <li>Completion confirmation with total counts</li>
+    <li>Any errors for individual files (other files continue processing)</li>
+  </ul>
+
+  <h3>Statistics Dashboard</h3>
+  <ul class="feature-list">
+    <li><strong>Summary Vectors</strong> — total number of chunks indexed in ChromaDB</li>
+    <li><strong>Docstore Entries</strong> — total parent documents (text + table + image) stored</li>
+    <li><strong>Collection Name</strong> — active ChromaDB collection</li>
+    <li><strong>Storage Path</strong> — server path where vectors are persisted</li>
+  </ul>
+
+  <h3>Admin Panel — UI Element Reference</h3>
+  <p>The following table explains every element visible in the Knowledge Base admin panel exactly as it appears in the web interface.</p>
+
+  <table class="tech-table">
+    <thead>
+      <tr><th>UI Element</th><th>Location</th><th>What It Means / Does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Knowledge Base</strong> (panel title)</td>
+        <td>Top of admin panel</td>
+        <td>Title of the admin side panel. The ✕ button closes the panel and returns to the chat view.</td>
+      </tr>
+      <tr>
+        <td><strong>Knowledge</strong> tab</td>
+        <td>Tab bar</td>
+        <td>Shows the knowledge base management view — statistics, upload, and indexing controls.</td>
+      </tr>
+      <tr>
+        <td><strong>Users</strong> tab</td>
+        <td>Tab bar</td>
+        <td>Switches to user account management — list all users, change roles, activate/deactivate, delete accounts.</td>
+      </tr>
+      <tr>
+        <td><strong>Summary Vectors: 0</strong></td>
+        <td>INDEX STATISTICS</td>
+        <td>The count of vector embeddings currently stored in ChromaDB. Each number represents one summarized chunk (text, table, or image caption) that the AI can search. <strong>0 means the knowledge base is empty</strong> — no documents have been indexed yet.</td>
+      </tr>
+      <tr>
+        <td><strong>Docstore Entries: 0</strong></td>
+        <td>INDEX STATISTICS</td>
+        <td>The count of full parent documents stored in the docstore (docstore.pkl). Each entry is the complete original content — the actual text paragraph, full table HTML, or base64 image — that gets sent to the LLM as context when the matching summary vector is retrieved. <strong>Should equal or exceed Summary Vectors.</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Refresh</strong> button</td>
+        <td>INDEX STATISTICS</td>
+        <td>Fetches the latest statistics from the server. Use this after indexing completes to confirm the counts updated correctly.</td>
+      </tr>
+      <tr>
+        <td><strong>Drop PDF or browse</strong> zone</td>
+        <td>UPLOAD PDF</td>
+        <td>Drag and drop one or more PDF files onto this area, or click "browse" to open a file picker. Files are sent from your browser to the server and saved into the server's configured <code>DATA_FOLDER</code>. Only <code>.pdf</code> files are accepted.</td>
+      </tr>
+      <tr>
+        <td><strong>Multiple files supported</strong></td>
+        <td>UPLOAD PDF</td>
+        <td>You can select or drop several PDFs at once. Each file is uploaded sequentially and a success/failure count is shown after upload.</td>
+      </tr>
+      <tr>
+        <td><strong>Single PDF</strong> (radio)</td>
+        <td>INDEX DOCUMENTS</td>
+        <td>When selected, only the PDF chosen in the dropdown below will be indexed. Use this when you want to add or update one specific document without touching the rest of the knowledge base. The old entries for that file are automatically removed first.</td>
+      </tr>
+      <tr>
+        <td><strong>Entire Folder</strong> (radio)</td>
+        <td>INDEX DOCUMENTS</td>
+        <td>When selected, every PDF in the server's <code>DATA_FOLDER</code> is indexed in alphabetical order. For each file, existing entries are removed first, then fresh chunks are generated — so this is safe to run multiple times without creating duplicates.</td>
+      </tr>
+      <tr>
+        <td><strong>PDF Dropdown</strong> (e.g., "1502 map.pdf")</td>
+        <td>INDEX DOCUMENTS (Single mode)</td>
+        <td>Lists all PDF files currently in the server's data folder. Select the file you want to index. This list refreshes automatically after each upload.</td>
+      </tr>
+      <tr>
+        <td><strong>▼ Advanced Paths</strong></td>
+        <td>INDEX DOCUMENTS</td>
+        <td>A collapsible section revealing optional override fields. Click to expand. Normally leave these empty — the server uses its defaults from <code>.env</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Vector store path</strong> field (e.g., "test_data")</td>
+        <td>Advanced Paths</td>
+        <td>Override the directory where ChromaDB stores its vectors and the docstore. Leave blank to use the server default (<code>VECTORSTORE_PATH</code> from <code>.env</code>). Useful for maintaining <strong>multiple separate knowledge bases</strong> — e.g., one for testing ("test_data") and one for production ("vectorstore").</td>
+      </tr>
+      <tr>
+        <td><strong>Data folder path</strong> field</td>
+        <td>Advanced Paths</td>
+        <td>Override the server folder scanned for PDFs during "Entire Folder" indexing. Leave blank to use the server default (<code>DATA_FOLDER</code> from <code>.env</code>).</td>
+      </tr>
+      <tr>
+        <td><strong>Index</strong> button</td>
+        <td>INDEX DOCUMENTS</td>
+        <td>Starts the indexing background job. A live log panel appears below showing progress. The button is disabled while a job is running to prevent duplicate submissions.</td>
+      </tr>
+      <tr>
+        <td><strong>Clear Entire Index</strong> button</td>
+        <td>INDEX DOCUMENTS</td>
+        <td>Permanently deletes all vectors from ChromaDB and clears the docstore. A confirmation dialog appears before proceeding. Use this before a full re-index from scratch. <strong>Cannot be undone.</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Progress Log</strong> panel</td>
+        <td>Below Index button</td>
+        <td>Live scrolling log showing what the indexing job is doing: which PDF is being processed, how many chunks/tables/images were found, summarization progress, and final counts. Errors for individual files are shown in red while processing continues for remaining files.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>What the Statistics Numbers Mean in Practice</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <h4>Summary Vectors = 0</h4>
+      <p>Knowledge base is empty. Any chat question will return "I could not find relevant information." Index at least one PDF first.</p>
+    </div>
+    <div class="card card-blue">
+      <h4>Summary Vectors = 120, Docstore = 120</h4>
+      <p>120 chunks indexed (typical for a 50-page PDF). Numbers match — healthy state. The AI can search all 120 chunks.</p>
+    </div>
+    <div class="card card-green">
+      <h4>Summary Vectors = 120, Docstore = 145</h4>
+      <p>More docstore entries than vectors — normal if some entries are images stored with no separate summary. All is fine.</p>
+    </div>
+    <div class="card card-purple">
+      <h4>Summary Vectors = 120, Docstore = 0</h4>
+      <p>Vectors exist but docstore is empty or corrupt — answers will be empty. Clear index and re-index all documents.</p>
+    </div>
+  </div>
+
+  <h3>User Management</h3>
+  <div class="card-grid">
+    <div class="card card-blue">
+      <div class="card-icon">👥</div>
+      <h4>View All Users</h4>
+      <p>List all registered users with their username, email, role, and active status.</p>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">🔧</div>
+      <h4>Change Role</h4>
+      <p>Promote a regular user to admin or demote an admin to user role.</p>
+    </div>
+    <div class="card card-accent">
+      <div class="card-icon">🔒</div>
+      <h4>Activate / Deactivate</h4>
+      <p>Disable a user account without deleting it. Deactivated users cannot log in.</p>
+    </div>
+    <div class="card card-purple">
+      <div class="card-icon">🗑️</div>
+      <h4>Delete User</h4>
+      <p>Permanently remove a user account. Admins cannot delete their own account.</p>
+    </div>
+  </div>
+
+  <h3>10.3 Web URL Sources — ChatGPT / Claude Browsing Approach</h3>
+  <p>Admins can register external web pages as additional knowledge sources from the <strong>Web URL Sources</strong> section of the Knowledge tab. Unlike PDFs (which are chunked, embedded, and searched semantically), URL content uses a fundamentally different strategy — the same approach used by ChatGPT browsing and Claude's document reading: <strong>fetch at query time, inject directly into the LLM prompt</strong>.</p>
+
+  <div class="info-box">
+    <strong>Key insight:</strong> Web pages are typically small enough to fit in the LLM's context window in full. Rather than compressing them through vector search (which would lose detail), the system gives the LLM the entire page to read — just like you would paste a webpage into ChatGPT and ask a question about it.
+  </div>
+
+  <h4>How It Works</h4>
+  <div class="card-grid">
+    <div class="card card-blue">
+      <h4>Step 1 — Admin Registers a URL</h4>
+      <p>Admin enters any <code>https://</code> URL in the admin panel. The server validates the URL is reachable (a quick HEAD request), then saves it to the <code>url_sources</code> database table. This is instant — no content is fetched or processed at add time.</p>
+    </div>
+    <div class="card card-green">
+      <h4>Step 2 — Fetched Fresh at Query Time</h4>
+      <p>When any user sends a chat message, all admin-registered URLs are fetched in parallel (via <code>ThreadPoolExecutor</code>). HTML is stripped using BeautifulSoup, leaving clean readable text. Fetched content is cached for <strong>1 hour</strong> — subsequent queries within that window use the cached copy instantly.</p>
+    </div>
+    <div class="card card-accent">
+      <h4>Step 3 — Injected Directly into LLM Prompt</h4>
+      <p>URL content does <em>not</em> go through the vectorstore or semantic search. It is appended directly to the LLM's prompt as a clearly labelled <strong>"Additional web sources"</strong> section — alongside the PDF context retrieved from ChromaDB. The LLM reads and reasons over both sources simultaneously.</p>
+    </div>
+    <div class="card card-purple">
+      <h4>Step 4 — LLM Synthesises Both</h4>
+      <p>The LLM generates an answer using <em>both</em> the most relevant PDF chunks from vector search AND the full text of each registered web page. If a web page contains more relevant information than the PDF knowledge base for a particular question, the LLM will naturally use it.</p>
+    </div>
+  </div>
+
+  <h4>PDF Sources vs. Web URL Sources — Comparison</h4>
+  <table class="tech-table">
+    <thead>
+      <tr><th>Aspect</th><th>PDF Sources</th><th>Web URL Sources</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>How added</td><td>Upload + Index (background job, minutes)</td><td>Paste URL + Save (instant, ~1 second)</td></tr>
+      <tr><td>When content is processed</td><td>At index time (once)</td><td>At query time (every query, cached 1 hour)</td></tr>
+      <tr><td>How retrieved</td><td>Semantic vector search (top-K most relevant chunks)</td><td>Full page content always included</td></tr>
+      <tr><td>Goes through vectorstore</td><td>Yes (ChromaDB)</td><td>No — bypasses vector search entirely</td></tr>
+      <tr><td>LLM sees</td><td>The most relevant PDF passages</td><td>The entire page text</td></tr>
+      <tr><td>Best for</td><td>Large document collections (books, reports)</td><td>Reference pages, documentation, live data sources</td></tr>
+      <tr><td>Content freshness</td><td>Snapshot at index time</td><td>Refreshed every hour automatically</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Admin UI Elements — Web URL Sources</h4>
+  <table class="tech-table">
+    <thead>
+      <tr><th>UI Element</th><th>What It Does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>URL input field</strong></td><td>Enter any fully-qualified <code>http://</code> or <code>https://</code> URL. The server will prepend <code>https://</code> automatically if the scheme is omitted.</td></tr>
+      <tr><td><strong>+ Add button</strong></td><td>Validates and saves the URL. A quick HEAD request confirms the page is reachable before saving. If the URL already exists, a 409 error is shown. Operation completes in ~1 second.</td></tr>
+      <tr><td><strong>URL chips</strong></td><td>Each saved URL appears as a pill/chip showing the URL. Click the <strong>×</strong> button on a chip to remove that URL (after confirmation). Removal also clears the cached content for that URL.</td></tr>
+      <tr><td><strong>Status message</strong></td><td>Shown below the input after adding: "URL saved. Content will be fetched and sent to the AI on next user query." Disappears after 4 seconds.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warn-box">
+    <strong>Content limit:</strong> If a URL returns a very large page (e.g., an entire documentation site rendered as one page), the text may exceed the LLM's context window when combined with PDF context. Use specific sub-pages rather than top-level URLs for best results. For example, use <code>https://example.com/docs/api</code> rather than <code>https://example.com/</code>.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 11 – SECURITY
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 11</div>
+    <h2>Authentication &amp; Security</h2>
+  </div>
+
+  <h3>Authentication Flow</h3>
+  <ul class="feature-list">
+    <li>Login sends credentials to <code>POST /api/login</code> over HTTP</li>
+    <li>Server verifies password against bcrypt hash stored in SQLite</li>
+    <li>On success, a <strong>cryptographically secure random token</strong> (32 bytes, URL-safe base64) is generated with Python's <code>secrets.token_urlsafe()</code></li>
+    <li>Token is stored server-side in an in-memory session dictionary keyed to user info</li>
+    <li>All subsequent API calls include the token in the <code>Authorization: Bearer &lt;token&gt;</code> header</li>
+    <li>Logout calls <code>POST /api/logout</code> which removes the token from the session store immediately</li>
+  </ul>
+
+  <h3>Authorization</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <h4>Public Endpoints</h4>
+      <p><code>/api/login</code>, <code>/api/signup</code>, <code>/api/health</code> — no authentication required</p>
+    </div>
+    <div class="card card-blue">
+      <h4>User Endpoints</h4>
+      <p><code>/api/chat</code>, <code>/api/chat/stream</code>, <code>/api/logout</code> — any authenticated session (user or admin)</p>
+    </div>
+    <div class="card card-purple">
+      <h4>Admin Endpoints</h4>
+      <p>All <code>/api/admin/*</code> endpoints — only sessions where <code>role == "admin"</code>. Returns 403 Forbidden otherwise.</p>
+    </div>
+  </div>
+
+  <h3>Password Security</h3>
+  <ul class="feature-list">
+    <li>All passwords are hashed with <strong>PBKDF2-HMAC-SHA256</strong> (260,000 iterations) and a unique per-user random salt before being stored in the database</li>
+    <li>Plain-text passwords are never written to disk or logs</li>
+    <li>Password validation enforces minimum 6 characters during sign-up</li>
+    <li>Username must be 3–32 characters; email must contain <code>@</code></li>
+  </ul>
+
+  <h3>File Upload Security</h3>
+  <ul class="feature-list">
+    <li>Only <code>.pdf</code> files are accepted by the upload endpoint — other file types return 400 Bad Request</li>
+    <li>Filename is sanitized using <code>Path(filename).name</code> to strip any directory traversal components</li>
+    <li>Only admin-role sessions can upload files</li>
+  </ul>
+
+  <div class="warn-box">
+    <strong>Production recommendation:</strong> For production deployment, add HTTPS (TLS) via a reverse proxy such as Nginx or Caddy. The session tokens are secure random strings but should be transmitted over encrypted connections. Also consider setting <code>SESSION_TIMEOUT</code> to expire inactive sessions automatically.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 12 – API REFERENCE
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 12</div>
+    <h2>API Reference</h2>
+  </div>
+
+  <p>All endpoints follow REST conventions. Request and response bodies are JSON unless otherwise noted. The base URL is the server address (e.g., <code>http://localhost:8000</code>).</p>
+
+  <table class="api-table">
+    <thead>
+      <tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/login</code></td>
+        <td><span class="role-pub">Public</span></td>
+        <td>Authenticate with username &amp; password. Returns <code>token</code>, <code>role</code>, <code>username</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/signup</code></td>
+        <td><span class="role-pub">Public</span></td>
+        <td>Register a new user account. Role defaults to <code>user</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/logout</code></td>
+        <td><span class="role-user">User</span></td>
+        <td>Invalidate the current session token.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/health</code></td>
+        <td><span class="role-pub">Public</span></td>
+        <td>Server health check. Returns vectorstore stats.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/chat</code></td>
+        <td><span class="role-user">User</span></td>
+        <td>Synchronous chat — waits for full answer. Returns answer, images, captions, verification status.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/chat/stream</code></td>
+        <td><span class="role-user">User</span></td>
+        <td>Streaming chat via SSE. Yields <code>token</code> events then a final <code>done</code> event with full result.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/admin/stats</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Returns vectorstore statistics (vector count, docstore count, collection info).</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/admin/pdfs</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>List all PDF files in the server's data folder with names and sizes.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/admin/upload</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Upload a PDF file from browser to server's data folder. Accepts <code>multipart/form-data</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/admin/index</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Start indexing job. Body: <code>{"mode":"single","pdf_path":"..."}</code> or <code>{"mode":"folder"}</code>. Returns <code>job_id</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/admin/index/{job_id}</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Poll indexing job status. Returns <code>status</code>, <code>messages</code> (live log), <code>error</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="method del">DELETE</span></td>
+        <td><code>/api/admin/index</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Clear entire knowledge base (all vectors and docstore). Irreversible.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/admin/users</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>List all registered users.</td>
+      </tr>
+      <tr>
+        <td><span class="method patch">PATCH</span></td>
+        <td><code>/api/admin/users/{id}</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Update user role or active status.</td>
+      </tr>
+      <tr>
+        <td><span class="method del">DELETE</span></td>
+        <td><code>/api/admin/users/{id}</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Delete a user account. Admins cannot delete themselves.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/admin/url-sources</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>List all admin-configured web URL sources (id, url, label, added_by, added_at).</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/admin/url-sources</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Register a new URL source. Body: <code>{"url": "https://...", "label": ""}</code>. Validates reachability via HEAD request, then saves to DB. Returns <code>{"status":"added","id":&lt;int&gt;}</code>. 409 if URL already exists.</td>
+      </tr>
+      <tr>
+        <td><span class="method del">DELETE</span></td>
+        <td><code>/api/admin/url-sources/{id}</code></td>
+        <td><span class="role-admin">Admin</span></td>
+        <td>Remove a URL source by id. Clears the cached content for that URL. Returns <code>{"status":"deleted"}</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 13 – CONFIGURATION
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 13</div>
+    <h2>Configuration Reference</h2>
+  </div>
+
+  <p>All configuration is managed through a <code>.env</code> file in the project root. No code changes are required to switch providers, tune performance, or enable features.</p>
+
+  <table class="config-table">
+    <thead>
+      <tr><th>Variable</th><th>Description</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>LLM_PROVIDER</td><td>LLM provider: <code>openai</code> or <code>anthropic</code></td><td>openai</td></tr>
+      <tr><td>OPENAI_API_KEY</td><td>OpenAI API key (required when LLM_PROVIDER=openai)</td><td>—</td></tr>
+      <tr><td>OPENAI_MODEL</td><td>OpenAI model name</td><td>gpt-4o</td></tr>
+      <tr><td>OPENAI_EMBEDDING_MODEL</td><td>OpenAI embedding model</td><td>text-embedding-3-small</td></tr>
+      <tr><td>ANTHROPIC_API_KEY</td><td>Anthropic API key (required when LLM_PROVIDER=anthropic)</td><td>—</td></tr>
+      <tr><td>ANTHROPIC_MODEL</td><td>Claude model name</td><td>claude-opus-4-6</td></tr>
+      <tr><td>GROQ_API_KEY</td><td>Groq API key (optional, used for fast text summarization)</td><td>—</td></tr>
+      <tr><td>EMBEDDING_BACKEND</td><td>Embedding provider: <code>openai</code> or <code>huggingface</code></td><td>openai</td></tr>
+      <tr><td>VECTORSTORE_PATH</td><td>Directory where ChromaDB and docstore are persisted</td><td>./vectorstore</td></tr>
+      <tr><td>DATA_FOLDER</td><td>Directory where uploaded PDFs are stored</td><td>./data</td></tr>
+      <tr><td>RETRIEVAL_TOP_K</td><td>Number of document chunks to retrieve per query</td><td>4</td></tr>
+      <tr><td>ENABLE_RERANKING</td><td>Enable cross-encoder re-ranking after retrieval</td><td>true</td></tr>
+      <tr><td>RERANKER_MODEL</td><td>HuggingFace cross-encoder model for re-ranking</td><td>cross-encoder/ms-marco-MiniLM-L-6-v2</td></tr>
+      <tr><td>ENABLE_WEB_SEARCH</td><td>Enable DuckDuckGo fallback when retrieval quality is poor</td><td>false</td></tr>
+      <tr><td>WEB_SEARCH_MAX_RESULTS</td><td>Number of web search results to include as fallback context</td><td>5</td></tr>
+      <tr><td>MAX_ITERATIVE_HOPS</td><td>Maximum additional retrieval attempts for unverified answers</td><td>1</td></tr>
+      <tr><td>SUMMARIZE_TEXT</td><td>Use LLM to summarize chunks during indexing (false = use raw text)</td><td>true</td></tr>
+      <tr><td>SUMMARIZE_CONCURRENCY</td><td>Number of parallel LLM summarization calls during ingestion</td><td>3</td></tr>
+      <tr><td>CHUNK_MAX_CHARS</td><td>Maximum characters per PDF chunk during ingestion</td><td>10000</td></tr>
+      <tr><td>CHUNK_COMBINE_UNDER</td><td>Merge adjacent chunks smaller than this value</td><td>2000</td></tr>
+      <tr><td>CHUNK_NEW_AFTER</td><td>Start a new chunk after this many characters</td><td>6000</td></tr>
+      <tr><td>CHROMA_COLLECTION</td><td>ChromaDB collection name</td><td>multi_modal_rag</td></tr>
+      <tr><td>ADMIN_USERNAME</td><td>Default admin username (created on first startup)</td><td>admin</td></tr>
+      <tr><td>ADMIN_PASSWORD</td><td>Default admin password (created on first startup)</td><td>nalanda@admin123</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 14 – LLM PROVIDER SWITCHING
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 14</div>
+    <h2>LLM Provider Switching</h2>
+  </div>
+
+  <p>The system supports multiple LLM providers and can be switched without any code changes — only <code>.env</code> file updates are needed. This prevents vendor lock-in and allows cost optimization.</p>
+
+  <h3>Supported Providers</h3>
+  <div class="card-grid-3">
+    <div class="card card-accent">
+      <div class="card-icon">🟢</div>
+      <h4>OpenAI (Default)</h4>
+      <p>GPT-4o used for generation, rewriting, verification, and HyDE. <code>text-embedding-3-small</code> for embeddings. Best overall quality.</p>
+    </div>
+    <div class="card card-blue">
+      <div class="card-icon">🔵</div>
+      <h4>Anthropic Claude</h4>
+      <p>Claude Opus/Sonnet used as drop-in replacement for all LLM calls. Set <code>LLM_PROVIDER=anthropic</code> and provide <code>ANTHROPIC_API_KEY</code>.</p>
+    </div>
+    <div class="card card-purple">
+      <div class="card-icon">⚡</div>
+      <h4>Groq (Partial)</h4>
+      <p>Used specifically for text summarization during indexing when <code>GROQ_API_KEY</code> is set. Very fast inference for batch summarization jobs.</p>
+    </div>
+  </div>
+
+  <h3>Provider Priority Logic</h3>
+  <ul class="feature-list">
+    <li><strong>LLM for generation/RAG:</strong> checks <code>LLM_PROVIDER</code> → uses Anthropic if set to "anthropic" with valid key, otherwise OpenAI</li>
+    <li><strong>LLM for summarization:</strong> checks Anthropic first → then Groq → then OpenAI (falls through to always find a working provider)</li>
+    <li><strong>Embeddings:</strong> checks <code>EMBEDDING_BACKEND</code> → HuggingFace (local, free) or OpenAI API</li>
+    <li><strong>Re-ranking:</strong> always local (sentence-transformers cross-encoder, no API cost)</li>
+  </ul>
+
+  <h3>Embedding Backend Options</h3>
+  <div class="card-grid">
+    <div class="card card-accent">
+      <h4>OpenAI Embeddings (Default)</h4>
+      <p>Uses <code>text-embedding-3-small</code> API. Highest quality embeddings. Requires API calls per document during indexing and per query during retrieval. Small cost per query.</p>
+    </div>
+    <div class="card card-blue">
+      <h4>HuggingFace Embeddings</h4>
+      <p>Uses <code>sentence-transformers/all-MiniLM-L6-v2</code> running locally on CPU. Zero API cost. Slightly lower quality than OpenAI. Good for development or budget deployments. Set <code>EMBEDDING_BACKEND=huggingface</code>.</p>
+    </div>
+  </div>
+
+  <div class="warn-box">
+    <strong>Important:</strong> Switching embedding backends requires a full re-index of all documents. The embedding vectors in ChromaDB must be generated by the same model used at query time, otherwise similarity scores will be meaningless.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SECTION 15 – GLOSSARY
+══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-num">Section 15</div>
+    <h2>Glossary</h2>
+  </div>
+
+  <dl class="glossary">
+    <dt>RAG (Retrieval-Augmented Generation)</dt>
+    <dd>An AI technique where the model retrieves relevant documents before generating an answer, grounding its response in real evidence rather than relying on training data alone.</dd>
+
+    <dt>Agentic RAG</dt>
+    <dd>An advanced form of RAG where the pipeline is orchestrated as a state machine (agent) that can make decisions — such as re-trying with a refined query or triggering web search — rather than following a fixed linear flow.</dd>
+
+    <dt>LangGraph</dt>
+    <dd>A framework built on top of LangChain for creating stateful, graph-based AI workflows. Each node in the graph is a function (retrieve, generate, verify), and edges define the flow including conditional branching.</dd>
+
+    <dt>Embedding / Vector Embedding</dt>
+    <dd>A numerical representation (list of hundreds of numbers) of text that captures its semantic meaning. Texts with similar meanings have embeddings that are mathematically close to each other, enabling similarity search.</dd>
+
+    <dt>ChromaDB</dt>
+    <dd>An open-source vector database that stores embeddings and enables fast nearest-neighbor similarity search. Uses SQLite as its storage backend.</dd>
+
+    <dt>Multi-Vector Retriever</dt>
+    <dd>A retrieval pattern where LLM-generated summaries (small, queryable) are stored in the vector store, but the full original documents (large, context-rich) are stored separately. Queries match against summaries; full documents are returned as context.</dd>
+
+    <dt>Cross-Encoder (Re-Ranking)</dt>
+    <dd>A neural network that reads a query and a document together to score their relevance. More accurate than embedding similarity but slower — used after initial retrieval to reorder candidates.</dd>
+
+    <dt>HyDE (Hypothetical Document Embeddings)</dt>
+    <dd>A retrieval technique where the LLM generates a hypothetical answer to the query, and that hypothetical answer's embedding is used for search — because it is closer in embedding space to real document passages than the query alone.</dd>
+
+    <dt>CRAG (Corrective RAG)</dt>
+    <dd>A technique that checks the quality of retrieved documents and falls back to an alternative source (web search) if the local knowledge base doesn't have sufficient information.</dd>
+
+    <dt>Self-RAG</dt>
+    <dd>A technique where the RAG system uses the LLM to verify its own generated answer against the retrieved context, flagging answers that are not grounded in the evidence.</dd>
+
+    <dt>SSE (Server-Sent Events)</dt>
+    <dd>A web standard for one-way, server-to-browser data streaming over a standard HTTP connection. Used here to stream AI-generated tokens to the browser in real time.</dd>
+
+    <dt>Docstore</dt>
+    <dd>The storage layer holding full parent documents (original text, table HTML, base64 images) indexed by UUID. Separate from the vector store which holds only summaries.</dd>
+
+    <dt>OCR (Optical Character Recognition)</dt>
+    <dd>Technology that converts images of text (scanned pages) into machine-readable text. Used by Tesseract to make scanned PDFs searchable.</dd>
+
+    <dt>bcrypt</dt>
+    <dd>A cryptographic password hashing algorithm designed to be slow and resistant to brute-force attacks. All user passwords are stored as bcrypt hashes.</dd>
+
+    <dt>Bearer Token</dt>
+    <dd>An authentication credential sent in the HTTP <code>Authorization</code> header as <code>Bearer &lt;token&gt;</code>. The server validates the token against its in-memory session store on every request.</dd>
+
+    <dt>Base64</dt>
+    <dd>A text encoding for binary data (like images). PDF-extracted images are stored as base64 strings and returned to the browser which decodes and displays them as <code>&lt;img&gt;</code> elements.</dd>
+
+    <dt>Chunk</dt>
+    <dd>A portion of text extracted from a PDF page. A single PDF is split into many chunks during ingestion — each chunk is a logical section of content (paragraph, sub-section, or table). Chunks are the fundamental unit of the knowledge base: each one is summarized, embedded, and stored separately. A 100-page PDF typically produces 50–200 chunks depending on layout and density.</dd>
+
+    <dt>Chunk Boundary / by_title Strategy</dt>
+    <dd>The rule that decides where one chunk ends and the next begins. This system uses the <strong>"by_title"</strong> strategy — chunks are split at section headings (e.g., "Chapter 3", "Excavation Results") rather than at arbitrary character counts. This keeps related content together and prevents answers from being split mid-thought. Three parameters control chunk size: <code>CHUNK_MAX_CHARS</code> (hard ceiling), <code>CHUNK_NEW_AFTER</code> (soft split point), and <code>CHUNK_COMBINE_UNDER</code> (merge short adjacent chunks).</dd>
+
+    <dt>CHUNK_MAX_CHARS (default: 10,000)</dt>
+    <dd>The absolute maximum number of characters a single chunk can contain. Any section longer than this is forcibly split. Set this lower (e.g., 4,000) if you want more granular retrieval; higher if your documents have very long sections that should stay together.</dd>
+
+    <dt>CHUNK_COMBINE_UNDER (default: 2,000)</dt>
+    <dd>If a chunk is shorter than this value, it is merged with the adjacent chunk rather than stored alone. Prevents tiny one-sentence chunks that would produce poor embeddings and unhelpful context for the LLM.</dd>
+
+    <dt>CHUNK_NEW_AFTER (default: 6,000)</dt>
+    <dd>The soft target size for starting a new chunk. Once a chunk reaches this length, the next section heading causes a split. Works together with <code>CHUNK_MAX_CHARS</code> to balance chunk size.</dd>
+
+    <dt>Summary Vector</dt>
+    <dd>The numerical embedding of the LLM-generated summary of a chunk — not the embedding of the raw chunk text. Stored in ChromaDB. When a user asks a question, their query is also embedded and compared against these summary vectors to find the most semantically similar chunks. The count shown as <strong>"Summary Vectors"</strong> in the admin panel is the total number of these entries in the database.</dd>
+
+    <dt>Docstore Entry</dt>
+    <dd>The full original content of a chunk (complete text, table HTML, or base64 image) stored in <code>docstore.pkl</code>, linked to its summary vector by a UUID. When retrieval finds a matching summary vector, the system fetches the corresponding docstore entry and sends the full content to the LLM as context. The <strong>"Docstore Entries"</strong> count in the admin panel reflects how many parent documents are stored.</dd>
+
+    <dt>Vector Store Path</dt>
+    <dd>The server directory where ChromaDB persists its SQLite database (<code>chroma.sqlite3</code>) and the docstore pickle file (<code>docstore.pkl</code>). Set via <code>VECTORSTORE_PATH</code> in <code>.env</code> or overridden per-session in the admin panel's Advanced Paths field. Multiple paths = multiple independent knowledge bases.</dd>
+
+    <dt>Parent Document</dt>
+    <dd>The full original content stored in the docstore, as opposed to the summary stored in the vector database. The "parent" of a summary vector — when retrieval finds a summary, the parent is fetched and returned. Contains the complete text/table/image that the LLM actually reads to generate its answer.</dd>
+
+    <dt>Summary Vectors vs Docstore Entries</dt>
+    <dd>These two numbers in the admin stats should be close but not necessarily equal. Summary Vectors = searchable index size (how many things the AI can find). Docstore Entries = storage size (how many full documents are retrievable). Images may have docstore entries without separate summary vectors if they share a vector with their parent text chunk.</dd>
+
+    <dt>Single PDF Mode</dt>
+    <dd>Indexing mode where only one selected PDF is processed. The system first removes all existing entries for that file (by matching the source path), then re-indexes it fresh. All other documents in the knowledge base are untouched. Ideal for updating one changed document.</dd>
+
+    <dt>Entire Folder Mode</dt>
+    <dd>Indexing mode where every PDF in the configured data folder is processed sequentially. For each file, existing entries are removed before new ones are added — making this safe to re-run without creating duplicates. Suitable for initial full knowledge base population or bulk updates.</dd>
+
+    <dt>Advanced Paths</dt>
+    <dd>Optional admin panel fields to override the server's default storage paths for a specific indexing job. <strong>Vector store path</strong> changes where ChromaDB writes/reads. <strong>Data folder path</strong> changes which folder is scanned for PDFs. Leaving both blank uses the server's <code>.env</code> defaults. Useful for maintaining separate test and production knowledge bases on the same server.</dd>
+
+    <dt>Background Job</dt>
+    <dd>Indexing always runs as a background thread on the server — it does not block the web interface or other users from chatting while it runs. The admin panel polls the job status every 1.5 seconds and shows live log output. The Index button is disabled while a job is running to prevent duplicate submissions.</dd>
+
+    <dt>Web URL Sources</dt>
+    <dd>Admin-configured web page URLs stored in the <code>url_sources</code> database table. Unlike PDFs, they are not indexed into the vector store. Instead, their content is fetched at query time and injected directly into the LLM's prompt alongside PDF context — the same approach used by ChatGPT browsing and Claude document reading. Useful for live reference pages, official documentation, or any web content that should always be available to the AI regardless of the user's question.</dd>
+
+    <dt>URL Content Cache</dt>
+    <dd>An in-process server-side cache (Python dictionary) that stores fetched web page content for 1 hour after the first fetch. When a user asks a question, each registered URL is checked: if a fresh cached copy exists it is used instantly; otherwise the page is fetched from the internet. The cache is invalidated immediately when a URL is deleted from the admin panel. Prevents redundant HTTP requests on every user query.</dd>
+
+    <dt>In-Prompt Web Context (vs. Vector Search)</dt>
+    <dd>The distinction between how PDFs and URLs are given to the LLM. PDFs go through <em>semantic retrieval</em> — only the most relevant chunks are selected from thousands of possibilities and given to the LLM. URL content goes through <em>direct prompt injection</em> — the full page text is always included, regardless of the question. Both appear in the same LLM prompt, and the LLM synthesises an answer from both simultaneously. Use PDFs for large corpora that need selective retrieval; use URL sources for small reference pages that should always be available in full.</dd>
+
+    <dt>PBKDF2-HMAC-SHA256</dt>
+    <dd>The password hashing algorithm used by this system. PBKDF2 (Password-Based Key Derivation Function 2) applies the SHA-256 hash function 260,000 times with a unique random salt per user. This makes brute-force and rainbow-table attacks computationally infeasible. Each user's salt and hash are stored in the database; the original password is never stored.</dd>
+  </dl>
+
+  <div class="doc-footer">
+    <p>Nalanda Multimodal Agentic RAG System — Documentation v3.1.0</p>
+    <p>Confidential — Prepared for Review — June 2026</p>
+  </div>
+</div>
+
+</body>
+</html>

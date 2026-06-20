@@ -282,6 +282,20 @@
             <div id="pdfList" class="pdf-list"><p class="muted-text">Loading…</p></div>
           </section>
 
+          <section class="panel-section">
+            <h3 class="section-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+              Web URL Sources
+            </h3>
+            <p class="muted-text" style="font-size:.76rem;margin-bottom:10px">Content fetched fresh each query (1-hr cache) and given directly to the AI — like ChatGPT/Claude browsing.</p>
+            <div id="urlSourceList" class="url-chips" style="margin-bottom:8px"></div>
+            <div class="url-input-row">
+              <input type="url" id="urlSourceInput" class="url-input" placeholder="https://example.com/page" autocomplete="off" />
+              <button type="button" id="urlSourceAddBtn" class="btn-url-add">+ Add</button>
+            </div>
+            <div id="urlSourceStatus" class="upload-status hidden"></div>
+          </section>
+
           <section class="panel-section danger-section">
             <h3 class="section-title danger-title">Danger Zone</h3>
             <button id="clearIndexBtn" class="btn-danger full">

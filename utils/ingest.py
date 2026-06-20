@@ -125,6 +125,8 @@ def ingest_pdf(pdf_path: str | Path) -> IngestedPDF:
     return IngestedPDF(source=str(pdf_path), texts=texts, tables=tables, images=images)
 
 
+
+
 def iter_pdfs(folder: str | Path) -> Iterator[Path]:
     folder = Path(folder)
     if not folder.exists():

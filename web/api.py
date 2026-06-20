@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import database as db
 
-from utils.config import TOP_K, VECTORSTORE_PATH, DATA_FOLDER
+from utils.config import TOP_K, VECTORSTORE_PATH, DATA_FOLDER, DOCSTORE_FILENAME
 from utils.rag_graph import query_with_sources, astream_rag_response
 from utils.vectorstore import MultimodalVectorStore
 
@@ -150,6 +150,10 @@ class ChatRequest(BaseModel):
     top_k: int | None = None
     vectorstore_path: str | None = None
 
+class UrlSourceRequest(BaseModel):
+    url: str = Field(min_length=8)
+    label: str = ""
+
 class ChatResponse(BaseModel):
     answer: str
     images: list[str]
@@ -235,10 +239,14 @@ def chat(
             images=[], captions=[], mode="text",
             verified=False, verification_reason="empty vector store",
         )
+    from utils.url_fetcher import fetch_urls_cached
+    url_records = db.list_url_sources()
+    web_docs = fetch_urls_cached([r["url"] for r in url_records]) if url_records else []
     result = query_with_sources(
         store, req.question,
         top_k=req.top_k or TOP_K,
         chat_history=_history_str(req.history),
+        web_docs=web_docs or None,
     )
     answer   = (result.get("response") or "").strip()
     images   = result.get("context", {}).get("images", []) or []
@@ -260,11 +268,19 @@ async def chat_stream(
     req: ChatRequest,
     authorization: str | None = Header(None, alias="Authorization"),
 ) -> StreamingResponse:
+    import asyncio
+    from utils.url_fetcher import fetch_urls_cached
+
     _get_session(authorization)
     store = _load_store(req.vectorstore_path)
     chat_history = _history_str(req.history)
 
-    if store.stats()["summary_vectors"] == 0:
+    url_records = db.list_url_sources()
+    web_docs = await asyncio.to_thread(
+        fetch_urls_cached, [r["url"] for r in url_records]
+    ) if url_records else []
+
+    if store.stats()["summary_vectors"] == 0 and not web_docs:
         async def _empty():
             yield f"data: {json.dumps({'type': 'done', 'answer': 'The knowledge base is empty. Please ask an administrator to index the documents.', 'images': [], 'captions': [], 'mode': 'text', 'verified': False, 'verification_reason': 'empty vector store'})}\n\n"
         return StreamingResponse(_empty(), media_type="text/event-stream",
@@ -273,7 +289,10 @@ async def chat_stream(
     async def _generate():
         try:
             async for event in astream_rag_response(
-                store, req.question, top_k=req.top_k or TOP_K, chat_history=chat_history
+                store, req.question,
+                top_k=req.top_k or TOP_K,
+                chat_history=chat_history,
+                web_docs=web_docs or None,
             ):
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as exc:
@@ -415,11 +434,88 @@ def admin_clear_index(
     authorization: str | None = Header(None, alias="Authorization"),
 ) -> dict:
     _admin_session(authorization)
-    import shutil
-    if VECTORSTORE_PATH.exists():
-        shutil.rmtree(VECTORSTORE_PATH)
+    import gc, shutil
+
+    # Step 1: Clear via Chroma API (avoids Windows SQLite file-lock issues)
+    try:
+        store = _load_store(None)
+        store.vectorstore._client.delete_collection(store.collection_name)
+    except Exception:
+        pass
+
+    # Step 2: Delete the docstore pickle
+    try:
+        docstore_path = VECTORSTORE_PATH / DOCSTORE_FILENAME
+        if docstore_path.exists():
+            docstore_path.unlink()
+    except Exception:
+        pass
+
+    # Step 3: Release all cached store references
     _load_store_cached.cache_clear()
+    gc.collect()
+
+    # Step 4: Best-effort full directory delete (may be skipped if SQLite still locked)
+    if VECTORSTORE_PATH.exists():
+        try:
+            shutil.rmtree(VECTORSTORE_PATH)
+        except Exception:
+            pass  # Collection already cleared above; directory will be reused cleanly
+
     return {"status": "cleared", "path": str(VECTORSTORE_PATH)}
+
+
+# ── Admin: URL sources ───────────────────────────────────────────────────────
+
+@app.get("/api/admin/url-sources")
+def admin_list_url_sources(
+    authorization: str | None = Header(None, alias="Authorization"),
+) -> dict:
+    _admin_session(authorization)
+    return {"url_sources": db.list_url_sources()}
+
+
+@app.post("/api/admin/url-sources")
+def admin_add_url_source(
+    req: UrlSourceRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+) -> dict:
+    sess = _admin_session(authorization)
+    if not req.url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
+    if db.url_source_exists(req.url):
+        raise HTTPException(status_code=409, detail="URL already exists")
+    # Quick HEAD check to confirm URL is reachable before saving
+    try:
+        import requests as _r
+        resp = _r.head(req.url, timeout=8, allow_redirects=True,
+                       headers={"User-Agent": "Mozilla/5.0 (compatible; NalandaRAG/1.0)"})
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=400, detail=f"URL returned HTTP {resp.status_code}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot reach URL: {exc}")
+    try:
+        from utils.url_fetcher import invalidate_cache
+        url_id = db.add_url_source(req.url, req.label, added_by=sess["username"])
+        invalidate_cache(req.url)   # ensure next query fetches fresh content
+        return {"status": "added", "id": url_id}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/admin/url-sources/{url_id}")
+def admin_delete_url_source(
+    url_id: int,
+    authorization: str | None = Header(None, alias="Authorization"),
+) -> dict:
+    _admin_session(authorization)
+    from utils.url_fetcher import invalidate_cache
+    deleted_url = db.delete_url_source(url_id)
+    if deleted_url:
+        invalidate_cache(deleted_url)
+    return {"status": "deleted"}
 
 
 # ── Static / SPA fallback ─────────────────────────────────────────────────────

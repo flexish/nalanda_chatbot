@@ -93,6 +93,12 @@ const clearChatBtn  = $('clearChatBtn');
 const verifiedBadge = $('verifiedBadge');
 const suggestions   = $('suggestions');
 
+// Admin URL Sources
+const urlSourceList   = $('urlSourceList');
+const urlSourceInput  = $('urlSourceInput');
+const urlSourceAddBtn = $('urlSourceAddBtn');
+const urlSourceStatus = $('urlSourceStatus');
+
 // Confirm dialog
 const confirmOverlay = $('confirmOverlay');
 const confirmTitle   = $('confirmTitle');
@@ -363,6 +369,7 @@ function showApp() {
     loadStats();
     loadPdfs();
     loadUsers();
+    loadUrlSources();
   } else {
     adminToggleBtn.classList.add('hidden');
   }
@@ -688,6 +695,79 @@ confirmOk.addEventListener('click', async () => {
 confirmCancel.addEventListener('click', () => { confirmOverlay.classList.add('hidden'); _confirmCb = null; });
 confirmOverlay.addEventListener('click', e => {
   if (e.target === confirmOverlay) { confirmOverlay.classList.add('hidden'); _confirmCb = null; }
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ADMIN: WEB URL SOURCES
+// ════════════════════════════════════════════════════════════════════════════
+
+async function loadUrlSources() {
+  if (!urlSourceList) return;
+  try {
+    const { url_sources = [] } = await apiGet('/api/admin/url-sources');
+    urlSourceList.innerHTML = '';
+    if (!url_sources.length) {
+      urlSourceList.innerHTML = '<p class="muted-text" style="font-size:.76rem">No URLs configured yet.</p>';
+      return;
+    }
+    url_sources.forEach(src => {
+      let hostname;
+      try { hostname = new URL(src.url).hostname; } catch { hostname = src.url; }
+      const chip = document.createElement('div');
+      chip.className = 'url-chip';
+      chip.innerHTML =
+        `<span class="url-chip-text" title="${esc(src.url)}">${esc(hostname)}</span>` +
+        `<button type="button" class="url-chip-remove" data-id="${src.id}" aria-label="Remove">×</button>`;
+      urlSourceList.appendChild(chip);
+    });
+  } catch (err) {
+    if (urlSourceList) urlSourceList.innerHTML = `<p class="muted-text">Error: ${esc(err.message)}</p>`;
+  }
+}
+
+if (urlSourceList) {
+  urlSourceList.addEventListener('click', e => {
+    const btn = e.target.closest('.url-chip-remove');
+    if (!btn) return;
+    const chip = btn.closest('.url-chip');
+    const urlText = chip?.querySelector('.url-chip-text')?.title || 'this URL';
+    showConfirm('Remove URL Source',
+      `Remove "${urlText}" from the knowledge base? Its indexed content will be deleted.`,
+      async () => {
+        try {
+          await apiDelete(`/api/admin/url-sources/${btn.dataset.id}`);
+          loadUrlSources();
+        } catch (err) { alert(`Failed: ${err.message}`); }
+      });
+  });
+}
+
+async function addUrlSource() {
+  if (!urlSourceInput) return;
+  let url = urlSourceInput.value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try { new URL(url); } catch { alert('Invalid URL'); return; }
+  urlSourceStatus.textContent = 'Checking URL…';
+  urlSourceStatus.className   = 'upload-status';
+  urlSourceStatus.classList.remove('hidden');
+  try {
+    await apiPost('/api/admin/url-sources', { url });
+    urlSourceInput.value = '';
+    urlSourceStatus.textContent = '✓ URL saved. Content will be fetched and sent to the AI on next user query.';
+    urlSourceStatus.className   = 'upload-status success';
+    setTimeout(() => urlSourceStatus.classList.add('hidden'), 4000);
+    loadUrlSources();
+  } catch (err) {
+    urlSourceStatus.textContent = `Error: ${err.message}`;
+    urlSourceStatus.className   = 'upload-status error';
+  }
+}
+
+if (urlSourceAddBtn) urlSourceAddBtn.addEventListener('click', addUrlSource);
+if (urlSourceInput)  urlSourceInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addUrlSource(); }
 });
 
 
