@@ -10,7 +10,6 @@ import re
 from typing import Any, TypedDict
 
 from langchain_core.messages import HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from PIL import Image
@@ -25,6 +24,13 @@ from utils.config import (
     TOP_K,
 )
 from utils.vectorstore import MultimodalVectorStore
+
+
+def _build_llm() -> Any:
+    if LLM_PROVIDER == "anthropic" and ANTHROPIC_API_KEY:
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
+    return ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
 
 
 class RAGState(TypedDict, total=False):
@@ -357,38 +363,78 @@ def _context_text_blob(context: dict[str, list[Any]]) -> str:
 
 
 def _self_rag_verification(
-    llm: ChatOpenAI,
+    llm: Any,
     question: str,
     answer: str,
     context: dict[str, list[Any]],
     image_caption: str,
 ) -> dict[str, Any]:
-    normalized_question = _normalize_entity_aliases(question)
-    normalized_caption = _normalize_entity_aliases(image_caption or "")
-    question_entities = _entity_tokens(normalized_question)
-    caption_entities = _entity_tokens(normalized_caption)
-    context_tokens = _topic_tokens(_context_text_blob(context))
-    answer_tokens = _topic_tokens(answer)
+    context_text = _context_text_blob(context)
+    has_image = bool(context.get("images"))
 
-    grounded = bool(answer_tokens & context_tokens) or not answer.strip()
+    verification_prompt = (
+        "You are a quality checker for a RAG chatbot about Nalanda Mahavihara.\n\n"
+        f"Retrieved context from PDFs:\n{context_text[:1500] or '(none)'}\n\n"
+        f"User question: {question}\n"
+        f"Generated answer: {answer}\n"
+        + (f"Image caption: {image_caption}\n" if has_image and image_caption else "")
+        + "\nTasks:\n"
+        "1. Is the answer grounded in (supported by) the retrieved context? Reply yes or no.\n"
+        + ("2. Is the attached image relevant to the question? Reply yes or no.\n" if has_image else "")
+        + "\nReply in this exact format:\n"
+        "GROUNDED: yes/no\n"
+        + ("KEEP_IMAGE: yes/no\n" if has_image else "")
+        + "REASON: one short sentence"
+    )
 
-    keep_image = False
-    reason = ""
-    if context.get("images"):
-        overlap = question_entities & caption_entities
-        if overlap and (
-            len(overlap) >= 2
-            or "avalokiteshwar" in overlap
-            or "bodhisattva" in overlap
-            or "avalokitesvara" in overlap
-        ):
-            keep_image = True
-            reason = "caption shares core entity with question"
-        elif not question_entities and len(answer_tokens & context_tokens) >= 2:
-            keep_image = True
-            reason = "broad question with strong context overlap"
+    try:
+        result = llm.invoke([HumanMessage(content=verification_prompt)])
+        text = result.content if hasattr(result, "content") else str(result)
 
-    return {"grounded": grounded, "keep_image": keep_image, "reason": reason}
+        grounded = True
+        keep_image = True
+        reason = ""
+
+        for line in text.splitlines():
+            line = line.strip()
+            lower = line.lower()
+            if lower.startswith("grounded:"):
+                grounded = "yes" in lower
+            elif lower.startswith("keep_image:"):
+                keep_image = "yes" in lower
+            elif lower.startswith("reason:"):
+                reason = line.split(":", 1)[-1].strip()
+
+        return {"grounded": grounded, "keep_image": keep_image, "reason": reason}
+
+    except Exception:
+        # Token-matching fallback if LLM call fails
+        normalized_question = _normalize_entity_aliases(question)
+        normalized_caption = _normalize_entity_aliases(image_caption or "")
+        question_entities = _entity_tokens(normalized_question)
+        caption_entities = _entity_tokens(normalized_caption)
+        context_tokens = _topic_tokens(_context_text_blob(context))
+        answer_tokens = _topic_tokens(answer)
+
+        grounded = bool(answer_tokens & context_tokens) or not answer.strip()
+        keep_image = False
+        reason = ""
+
+        if context.get("images"):
+            overlap = question_entities & caption_entities
+            if overlap and (
+                len(overlap) >= 2
+                or "avalokiteshwar" in overlap
+                or "bodhisattva" in overlap
+                or "avalokitesvara" in overlap
+            ):
+                keep_image = True
+                reason = "caption shares core entity with question"
+            elif not question_entities and len(answer_tokens & context_tokens) >= 2:
+                keep_image = True
+                reason = "broad question with strong context overlap"
+
+        return {"grounded": grounded, "keep_image": keep_image, "reason": reason}
 
 
 def _is_renderable_image(b64_data: str) -> bool:
@@ -762,121 +808,115 @@ def build_multimodal_messages(
     return [HumanMessage(content=prompt_content)]
 
 
+def _run_retrieve(
+    store: MultimodalVectorStore,
+    question: str,
+    chat_history: str,
+    k: int,
+) -> dict[str, Any]:
+    retrieval_question = _retrieval_question(question, chat_history)
+
+    if _is_image_request(question):
+        keyword_images = _select_images_by_keyword(store, retrieval_question)
+        if keyword_images:
+            limited_images = _limit_images(keyword_images, question)
+            images = [image_b64 for image_b64, _ in limited_images]
+            captions = [caption for _, caption in limited_images]
+            return {
+                "retrieved_docs": images,
+                "context": {"images": images, "texts": [], "image_captions": captions},
+                "mode": "image",
+                "retrieval_question": retrieval_question,
+            }
+
+    keyword_limit = 8 if _is_image_request(question) else 2
+    keyword_text_docs = _select_text_docs_by_keyword(store, retrieval_question, limit=keyword_limit)
+    semantic_text_docs = _select_best_text_docs(store, retrieval_question, k)
+    text_docs = _merge_docs(keyword_text_docs, semantic_text_docs, limit=max(3, k))
+    context = parse_docs(text_docs)
+
+    text_sources = {
+        str(getattr(doc, "metadata", {}).get("source", ""))
+        for doc in text_docs
+        if isinstance(getattr(doc, "metadata", {}), dict) and getattr(doc, "metadata", {}).get("source")
+    }
+
+    if _is_image_request(question):
+        nearby_images = _select_images_near_text_docs(store, text_docs, retrieval_question)
+        if nearby_images:
+            limited_images = _limit_images(nearby_images, question)
+            images = [image_b64 for image_b64, _ in limited_images]
+            captions = [caption for _, caption in limited_images]
+            return {
+                "retrieved_docs": images,
+                "context": {"images": images, "texts": text_docs, "image_captions": captions},
+                "mode": "image",
+                "retrieval_question": retrieval_question,
+                "verified": True,
+                "verification_reason": "image matched by nearby PDF text/page label",
+            }
+
+    best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None)
+    if not best and _is_image_request(question):
+        best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None, allow_weak=True)
+    if not best and _is_image_request(question):
+        keyword_images = _select_images_by_keyword(store, retrieval_question, allowed_sources=text_sources or None)
+        if keyword_images:
+            limited_images = _limit_images(keyword_images, question)
+            images = [image_b64 for image_b64, _ in limited_images]
+            captions = [caption for _, caption in limited_images]
+            return {
+                "retrieved_docs": images,
+                "context": {"images": images, "texts": [], "image_captions": captions},
+                "mode": "image",
+                "retrieval_question": retrieval_question,
+            }
+    if best:
+        image_b64, caption = best
+        if not context.get("texts"):
+            context["texts"] = [caption] if caption else []
+        context = {
+            "images": [image_b64],
+            "texts": context.get("texts", []),
+            "image_captions": [caption] if caption else [],
+        }
+    else:
+        context["images"] = []
+
+    if _is_image_request(question) and best:
+        image_b64, caption = best
+        return {
+            "retrieved_docs": [image_b64],
+            "context": {"images": [image_b64], "texts": [], "image_captions": [caption]},
+            "mode": "image",
+            "retrieval_question": retrieval_question,
+        }
+
+    return {
+        "retrieved_docs": text_docs,
+        "context": context,
+        "mode": "text",
+        "retrieval_question": retrieval_question,
+    }
+
+
 def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
     """Build and compile a LangGraph RAG pipeline."""
     k = top_k or TOP_K
     retriever = store.retriever
     retriever.search_kwargs = {"k": max(k, 8)}
-    if LLM_PROVIDER == "anthropic" and ANTHROPIC_API_KEY:
-        from langchain_anthropic import ChatAnthropic
-        llm = ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
-    else:
-        llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
+    llm = _build_llm()
 
     def retrieve_node(state: RAGState) -> dict[str, Any]:
-        question = state["question"]
-        chat_history = state.get("chat_history", "")
-        retrieval_question = _retrieval_question(question, chat_history)
-        mode = "text"
-
-        if _is_image_request(question):
-            keyword_images = _select_images_by_keyword(store, retrieval_question)
-            if keyword_images:
-                limited_images = _limit_images(keyword_images, question)
-                images = [image_b64 for image_b64, _ in limited_images]
-                captions = [caption for _, caption in limited_images]
-                return {
-                    "retrieved_docs": images,
-                    "context": {"images": images, "texts": [], "image_captions": captions},
-                    "mode": "image",
-                    "retrieval_question": retrieval_question,
-                }
-
-        keyword_limit = 8 if _is_image_request(question) else 2
-        keyword_text_docs = _select_text_docs_by_keyword(store, retrieval_question, limit=keyword_limit)
-        semantic_text_docs = _select_best_text_docs(store, retrieval_question, k)
-        text_docs = _merge_docs(keyword_text_docs, semantic_text_docs, limit=max(3, k))
-        context = parse_docs(text_docs)
-
-        text_sources = {
-            str(getattr(doc, "metadata", {}).get("source", ""))
-            for doc in text_docs
-            if isinstance(getattr(doc, "metadata", {}), dict) and getattr(doc, "metadata", {}).get("source")
-        }
-
-        if _is_image_request(question):
-            nearby_images = _select_images_near_text_docs(store, text_docs, retrieval_question)
-            if nearby_images:
-                limited_images = _limit_images(nearby_images, question)
-                images = [image_b64 for image_b64, _ in limited_images]
-                captions = [caption for _, caption in limited_images]
-                return {
-                    "retrieved_docs": images,
-                    "context": {"images": images, "texts": text_docs, "image_captions": captions},
-                    "mode": "image",
-                    "retrieval_question": retrieval_question,
-                    "verified": True,
-                    "verification_reason": "image matched by nearby PDF text/page label",
-                }
-
-        best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None)
-        # If user explicitly asked to show an image and no strict match found,
-        # try a relaxed/fallback search to prefer showing something rather than nothing.
-        if not best and _is_image_request(question):
-            best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None, allow_weak=True)
-        if not best and _is_image_request(question):
-            keyword_images = _select_images_by_keyword(store, retrieval_question, allowed_sources=text_sources or None)
-            if keyword_images:
-                limited_images = _limit_images(keyword_images, question)
-                images = [image_b64 for image_b64, _ in limited_images]
-                captions = [caption for _, caption in limited_images]
-                return {
-                    "retrieved_docs": images,
-                    "context": {"images": images, "texts": [], "image_captions": captions},
-                    "mode": "image",
-                    "retrieval_question": retrieval_question,
-                }
-        if best:
-            image_b64, caption = best
-            if not context.get("texts"):
-                context["texts"] = [caption] if caption else []
-            context = {
-                "images": [image_b64],
-                "texts": context.get("texts", []),
-                "image_captions": [caption] if caption else [],
-            }
-        else:
-            context["images"] = []
-
-        if _is_image_request(question):
-            if best:
-                image_b64, caption = best
-                mode = "image"
-                return {
-                    "retrieved_docs": [image_b64],
-                    "context": {"images": [image_b64], "texts": [], "image_captions": [caption]},
-                    "mode": mode,
-                }
-
-        return {
-            "retrieved_docs": text_docs,
-            "context": context,
-            "mode": mode,
-            "retrieval_question": retrieval_question,
-        }
+        return _run_retrieve(store, state["question"], state.get("chat_history", ""), k)
 
     def generate_node(state: RAGState) -> dict[str, str]:
-        if state.get("mode") == "image" and state.get("context", {}).get("images"):
-            # For image mode we skip LLM text generation — response will be handled by UI using image + caption
-            return {"response": ""}
         messages = build_multimodal_messages(
             state["context"],
             state["question"],
             state.get("chat_history", ""),
         )
-        prompt = ChatPromptTemplate.from_messages(messages)
-        chain = prompt | llm
-        result = chain.invoke({})
+        result = llm.invoke(messages)
         content = result.content if hasattr(result, "content") else str(result)
         return {"response": content}
 
@@ -885,30 +925,17 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
         images = context.get("images", []) or []
         captions = context.get("image_captions", []) or []
         answer = state.get("response", "")
-        if not images:
-            context_tokens = _topic_tokens(_context_text_blob(context))
-            answer_tokens = _topic_tokens(answer)
-            if not context_tokens:
-                return {
-                    "verified": False,
-                    "verification_reason": "no retrieved PDF text context",
-                    "context": context,
-                    "response": "I could not verify this from the indexed PDF context.",
-                }
-            if answer.strip() and not (answer_tokens & context_tokens):
-                return {
-                    "verified": False,
-                    "verification_reason": "answer has weak overlap with retrieved PDF context",
-                    "context": context,
-                    "response": (
-                        f"{answer}\n\n"
-                        "Verification note: this answer has weak overlap with the retrieved PDF context."
-                    ),
-                }
-            return {"verified": True, "verification_reason": "grounded in retrieved PDF text", "context": context}
+
+        context_text = _context_text_blob(context)
+        if not context_text.strip() and not images:
+            return {
+                "verified": False,
+                "verification_reason": "no retrieved PDF text context",
+                "context": context,
+                "response": "I could not find relevant information in the indexed documents.",
+            }
 
         if state.get("mode") == "image":
-            # Explicit image requests should keep the selected knowledge-base image.
             return {"verified": True, "verification_reason": "explicit image request", "context": context}
 
         verification = _self_rag_verification(
@@ -918,11 +945,21 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
             context,
             captions[0] if captions else "",
         )
+
         if not verification.get("keep_image", True):
             context["images"] = []
             context["image_captions"] = []
+
+        if not verification.get("grounded", True):
+            return {
+                "verified": False,
+                "verification_reason": verification.get("reason", ""),
+                "context": context,
+                "response": f"{answer}\n\n_Note: This answer may not be fully supported by the indexed documents._",
+            }
+
         return {
-            "verified": bool(verification.get("grounded", True)),
+            "verified": True,
             "verification_reason": verification.get("reason", ""),
             "context": context,
         }
@@ -956,4 +993,75 @@ def query_with_sources(
         "mode": result.get("mode", "text"),
         "verified": result.get("verified", True),
         "verification_reason": result.get("verification_reason", ""),
+    }
+
+
+async def astream_rag_response(
+    store: MultimodalVectorStore,
+    question: str,
+    top_k: int | None = None,
+    chat_history: str = "",
+):
+    """Async generator: yields {type:'token', content:'...'} chunks then a final {type:'done', ...} event."""
+    import asyncio
+
+    k = top_k or TOP_K
+    llm = _build_llm()
+
+    retrieved = await asyncio.to_thread(_run_retrieve, store, question, chat_history, k)
+    context = retrieved["context"]
+    mode = retrieved.get("mode", "text")
+    pre_verified = retrieved.get("verified")
+    pre_reason = retrieved.get("verification_reason", "")
+
+    if not _context_text_blob(context).strip() and not context.get("images"):
+        yield {
+            "type": "done",
+            "answer": "I could not find relevant information in the indexed documents.",
+            "images": [], "captions": [], "mode": mode,
+            "verified": False, "verification_reason": "no retrieved PDF text context",
+        }
+        return
+
+    messages = build_multimodal_messages(context, question, chat_history)
+    full_response = ""
+
+    async for chunk in llm.astream(messages):
+        token = chunk.content if hasattr(chunk, "content") else str(chunk)
+        if token:
+            full_response += token
+            yield {"type": "token", "content": token}
+
+    images = list(context.get("images", []) or [])
+    captions = list(context.get("image_captions", []) or [])
+
+    if pre_verified is not None:
+        verified = pre_verified
+        reason = pre_reason
+    elif mode == "image":
+        verified = True
+        reason = "explicit image request"
+    else:
+        verification = await asyncio.to_thread(
+            _self_rag_verification, llm, question, full_response, context,
+            captions[0] if captions else "",
+        )
+        if not verification.get("keep_image", True):
+            images = []
+            captions = []
+        verified = bool(verification.get("grounded", True))
+        reason = verification.get("reason", "")
+        if not verified:
+            full_response += "\n\n_Note: This answer may not be fully supported by the indexed documents._"
+
+    final_context = _apply_requested_image_limit({"images": images, "image_captions": captions}, question)
+
+    yield {
+        "type": "done",
+        "answer": full_response,
+        "images": final_context.get("images", []),
+        "captions": final_context.get("image_captions", []),
+        "mode": mode,
+        "verified": verified,
+        "verification_reason": reason,
     }

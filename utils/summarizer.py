@@ -18,6 +18,7 @@ from utils.config import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     SUMMARIZE_CONCURRENCY,
+    SUMMARIZE_TEXT,
     TEXT_SUMMARY_PROMPT,
 )
 from utils.ingest import ParentDocument
@@ -64,6 +65,8 @@ def summarize_texts(
 ) -> List[str]:
     if not texts:
         return []
+    if not SUMMARIZE_TEXT:
+        return [t.text[:500] for t in texts]
     if on_progress:
         on_progress(f"Summarizing {len(texts)} text chunks...")
     elements = [t.text for t in texts]
@@ -76,6 +79,8 @@ def summarize_tables(
 ) -> List[str]:
     if not tables:
         return []
+    if not SUMMARIZE_TEXT:
+        return [(t.metadata.get("text_as_html") or t.text)[:500] for t in tables]
     if on_progress:
         on_progress(f"Summarizing {len(tables)} tables...")
     elements = [

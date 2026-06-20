@@ -31,6 +31,7 @@ DOCSTORE_FILENAME = "docstore.pkl"
 
 TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
 SUMMARIZE_CONCURRENCY = int(os.getenv("SUMMARIZE_CONCURRENCY", "3"))
+SUMMARIZE_TEXT = os.getenv("SUMMARIZE_TEXT", "true").lower() == "true"
 
 IMAGE_SUMMARY_PROMPT = os.getenv(
     "IMAGE_SUMMARY_PROMPT",

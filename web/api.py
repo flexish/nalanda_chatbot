@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import sys
@@ -11,7 +12,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -20,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import database as db
 
 from utils.config import TOP_K, VECTORSTORE_PATH, DATA_FOLDER
-from utils.rag_graph import query_with_sources
+from utils.rag_graph import query_with_sources, astream_rag_response
 from utils.vectorstore import MultimodalVectorStore
 
 
@@ -249,6 +250,39 @@ def chat(
         mode=result.get("mode", "text"),
         verified=bool(result.get("verified", True)),
         verification_reason=result.get("verification_reason", ""),
+    )
+
+
+# ── Chat streaming ────────────────────────────────────────────────────────────
+
+@app.post("/api/chat/stream")
+async def chat_stream(
+    req: ChatRequest,
+    authorization: str | None = Header(None, alias="Authorization"),
+) -> StreamingResponse:
+    _get_session(authorization)
+    store = _load_store(req.vectorstore_path)
+    chat_history = _history_str(req.history)
+
+    if store.stats()["summary_vectors"] == 0:
+        async def _empty():
+            yield f"data: {json.dumps({'type': 'done', 'answer': 'The knowledge base is empty. Please ask an administrator to index the documents.', 'images': [], 'captions': [], 'mode': 'text', 'verified': False, 'verification_reason': 'empty vector store'})}\n\n"
+        return StreamingResponse(_empty(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    async def _generate():
+        try:
+            async for event in astream_rag_response(
+                store, req.question, top_k=req.top_k or TOP_K, chat_history=chat_history
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

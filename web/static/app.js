@@ -726,23 +726,88 @@ chatForm.addEventListener('submit', async e => {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    const data = await apiPost('/api/chat', {
-      question: q,
-      top_k: parseInt(topKInput.value || '4', 10),
-      history: S.history.slice(-8),
+    const response = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        question: q,
+        top_k: parseInt(topKInput.value || '4', 10),
+        history: S.history.slice(-8),
+      }),
     });
-    thinkingRow.classList.add('hidden');
-    const answer = data.answer || '';
-    appendMessage('assistant', answer, data);
-    S.history.push({ role: 'assistant', content: answer });
 
-    if (data.verified !== undefined) {
-      verifiedBadge.classList.remove('hidden', 'ok', 'no');
-      verifiedBadge.textContent = data.verified
-        ? '✓ Verified'
-        : (data.verification_reason ? `⚠ ${data.verification_reason}` : '⚠ Unverified');
-      verifiedBadge.classList.add(data.verified ? 'ok' : 'no');
-      verifiedBadge.classList.remove('hidden');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(err.detail || `HTTP ${response.status}`);
+    }
+
+    thinkingRow.classList.add('hidden');
+    const { node, textEl, imagesEl, metaEl } = createAssistantBubble();
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullAnswer = '';
+    let donePayload = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+        if (event.type === 'token') {
+          fullAnswer += event.content;
+          textEl.textContent = fullAnswer;
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else if (event.type === 'done') {
+          donePayload = event;
+          if (event.answer) { fullAnswer = event.answer; textEl.textContent = fullAnswer; }
+        } else if (event.type === 'error') {
+          textEl.textContent = `Query failed: ${event.message}`;
+        }
+      }
+    }
+
+    if (donePayload) {
+      const images = donePayload.images || [];
+      const captions = donePayload.captions || [];
+      images.forEach((b64, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'img-wrap';
+        const img = document.createElement('img');
+        img.loading = 'lazy'; img.alt = captions[i] || `Image ${i + 1}`;
+        img.src = `data:image/jpeg;base64,${b64}`;
+        wrap.appendChild(img);
+        if (captions[i]) {
+          const cap = document.createElement('p');
+          cap.className = 'img-caption'; cap.textContent = captions[i];
+          wrap.appendChild(cap);
+        }
+        imagesEl.appendChild(wrap);
+      });
+
+      if (donePayload.verification_reason) {
+        metaEl.textContent = donePayload.verified
+          ? `✓ ${donePayload.verification_reason}`
+          : `⚠ ${donePayload.verification_reason}`;
+      }
+
+      if (donePayload.verified !== undefined) {
+        verifiedBadge.classList.remove('hidden', 'ok', 'no');
+        verifiedBadge.textContent = donePayload.verified
+          ? '✓ Verified'
+          : (donePayload.verification_reason ? `⚠ ${donePayload.verification_reason}` : '⚠ Unverified');
+        verifiedBadge.classList.add(donePayload.verified ? 'ok' : 'no');
+        verifiedBadge.classList.remove('hidden');
+      }
+
+      S.history.push({ role: 'assistant', content: fullAnswer });
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   } catch (err) {
     thinkingRow.classList.add('hidden');
@@ -752,8 +817,23 @@ chatForm.addEventListener('submit', async e => {
     } else {
       appendMessage('assistant', `Query failed: ${err.message}`, {});
     }
+  } finally {
+    sendBtn.disabled = false;
   }
 });
+
+function createAssistantBubble() {
+  const node = msgTpl.content.firstElementChild.cloneNode(true);
+  node.classList.add('assistant');
+  node.querySelector('.msg-avatar').textContent = 'N';
+  const textEl   = node.querySelector('.msg-text');
+  const imagesEl = node.querySelector('.msg-images');
+  const metaEl   = node.querySelector('.msg-meta');
+  textEl.textContent = '';
+  chatMessages.appendChild(node);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return { node, textEl, imagesEl, metaEl };
+}
 
 function appendMessage(role, text, payload) {
   const node = msgTpl.content.firstElementChild.cloneNode(true);
