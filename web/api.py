@@ -93,7 +93,8 @@ def _run_index(job: _Job, mode: str, pdf_path: str | None, vstore: str, dfolder:
         store = MultimodalVectorStore(persist_dir=Path(vstore))
         if mode == "single" and pdf_path:
             from utils.ingest import ingest_pdf
-            p = Path(pdf_path)
+            # pdf_path is a bare filename — resolve it against the server's data folder
+            p = (Path(dfolder) / Path(pdf_path).name)
             log(f"Processing {p.name}…")
             removed = store.remove_source(str(p))
             if removed:
@@ -148,7 +149,6 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
     history: list[ChatMessage] = Field(default_factory=list)
     top_k: int | None = None
-    vectorstore_path: str | None = None
 
 class UrlSourceRequest(BaseModel):
     url: str = Field(min_length=8)
@@ -165,8 +165,6 @@ class ChatResponse(BaseModel):
 class IndexRequest(BaseModel):
     mode: Literal["single", "folder"] = "single"
     pdf_path: str | None = None
-    vectorstore_path: str | None = None
-    data_folder: str | None = None
 
 class JobStatusResponse(BaseModel):
     job_id: str
@@ -232,7 +230,7 @@ def chat(
     authorization: str | None = Header(None, alias="Authorization"),
 ) -> ChatResponse:
     _get_session(authorization)
-    store = _load_store(req.vectorstore_path)
+    store = _load_store(None)
     if store.stats()["summary_vectors"] == 0:
         return ChatResponse(
             answer="The knowledge base is empty. Please ask an administrator to index the documents.",
@@ -272,7 +270,7 @@ async def chat_stream(
     from utils.url_fetcher import fetch_urls_cached
 
     _get_session(authorization)
-    store = _load_store(req.vectorstore_path)
+    store = _load_store(None)
     chat_history = _history_str(req.history)
 
     url_records = db.list_url_sources()
@@ -363,11 +361,10 @@ def admin_delete_user(
 
 @app.get("/api/admin/pdfs")
 def admin_list_pdfs(
-    data_folder: str | None = None,
     authorization: str | None = Header(None, alias="Authorization"),
 ) -> dict:
     _admin_session(authorization)
-    folder = Path(data_folder) if data_folder else DATA_FOLDER
+    folder = DATA_FOLDER
     if not folder.exists():
         return {"pdfs": [], "folder": str(folder)}
     pdfs = sorted(folder.glob("**/*.pdf"))
@@ -408,9 +405,7 @@ def admin_index(
     _jobs[job_id] = job
     threading.Thread(
         target=_run_index,
-        args=(job, req.mode, req.pdf_path,
-              req.vectorstore_path or str(VECTORSTORE_PATH),
-              req.data_folder or str(DATA_FOLDER)),
+        args=(job, req.mode, req.pdf_path, str(VECTORSTORE_PATH), str(DATA_FOLDER)),
         daemon=True,
     ).start()
     return JobStatusResponse(job_id=job_id, status=job.status, messages=[], error=None)

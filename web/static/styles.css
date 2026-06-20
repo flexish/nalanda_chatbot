@@ -549,13 +549,6 @@ body {
   font-size: .8rem; color: #7a4a00; margin-bottom: 12px; line-height: 1.5;
 }
 
-.path-details { margin-bottom: 14px; font-size: .84rem; }
-.path-details summary {
-  cursor: pointer; color: var(--text-muted); font-size: .78rem;
-  letter-spacing: .04em; user-select: none; margin-bottom: 4px;
-}
-.path-details summary:hover { color: var(--saffron); }
-
 /* Floating-label (in-panel) */
 .mt8 { margin-top: 8px; }
 .field-wrap input {
@@ -614,19 +607,26 @@ body {
 .log-done { color: #80e0a0; }
 .log-err  { color: #f08080; }
 
-/* PDF list */
-.pdf-list {
-  display: flex; flex-direction: column; gap: 5px;
-  max-height: 200px; overflow-y: auto;
+/* Uploaded files panel (step 2) */
+.uploaded-panel { margin-top: 10px; }
+.uploaded-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 2px; margin-bottom: 6px;
 }
-.pdf-item {
-  display: flex; align-items: center; gap: 9px;
-  padding: 8px 10px;
-  background: var(--parchment); border: 1px solid var(--border);
-  border-radius: 8px; font-size: .78rem;
+.chk-label { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: var(--text); cursor: pointer; }
+.chk-label input[type="checkbox"] { accent-color: var(--saffron-dk); width: 14px; height: 14px; cursor: pointer; }
+.muted-badge { font-size: .73rem; color: var(--text-muted); }
+.uploaded-list { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow-y: auto; }
+.uploaded-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--parchment);
+  font-size: .78rem; transition: background .15s;
 }
-.pdf-item-name { flex: 1; color: var(--text); font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pdf-item-size { color: var(--text-muted); flex-shrink: 0; font-size: .70rem; }
+.uploaded-item:hover { background: rgba(212,148,30,.07); }
+.uploaded-item input[type="checkbox"] { accent-color: var(--saffron-dk); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+.uploaded-item-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text); font-weight: 500; }
+
 .muted-text { font-size: .8rem; color: var(--text-muted); text-align: center; padding: 6px 0; }
 
 /* Users list */

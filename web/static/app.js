@@ -7,12 +7,12 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const S = {
-  token:    localStorage.getItem('nk_token')    || '',
-  role:     localStorage.getItem('nk_role')     || '',
-  username: localStorage.getItem('nk_username') || '',
-  history:  [],
-  jobId:    null,
-  jobTimer: null,
+  token:        localStorage.getItem('nk_token')    || '',
+  role:         localStorage.getItem('nk_role')     || '',
+  username:     localStorage.getItem('nk_username') || '',
+  history:      [],
+  jobId:        null,
+  jobTimer:     null,
 };
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -64,19 +64,17 @@ const mainContent   = $('mainContent');
 const statVectors    = $('statVectors');
 const statDocs       = $('statDocs');
 const refreshStatsBtn = $('refreshStatsBtn');
-const uploadZone     = $('uploadZone');
-const pdfFileInput   = $('pdfFileInput');
-const uploadStatus   = $('uploadStatus');
-const pdfSelect      = $('pdfSelect');
-const pdfSelectWrap  = $('pdfSelectWrap');
-const folderWarnWrap = $('folderWarnWrap');
-const vstorePath     = $('vstorePath');
-const dataFolderPath = $('dataFolderPath');
-const indexBtn       = $('indexBtn');
-const indexProgress  = $('indexProgress');
-const progressLog    = $('progressLog');
-const refreshPdfsBtn = $('refreshPdfsBtn');
-const pdfList        = $('pdfList');
+const uploadZone      = $('uploadZone');
+const pdfFileInput    = $('pdfFileInput');
+const folderInput     = $('folderInput');
+const uploadStatus    = $('uploadStatus');
+const uploadedPanel   = $('uploadedPanel');
+const uploadedList    = $('uploadedList');
+const selectAllChk    = $('selectAllChk');
+const selectedCount   = $('selectedCount');
+const indexSelectedBtn = $('indexSelectedBtn');
+const indexProgress   = $('indexProgress');
+const progressLog     = $('progressLog');
 const clearIndexBtn  = $('clearIndexBtn');
 const userList       = $('userList');
 const refreshUsersBtn = $('refreshUsersBtn');
@@ -367,7 +365,6 @@ function showApp() {
   if (S.role === 'admin') {
     adminToggleBtn.classList.remove('hidden');
     loadStats();
-    loadPdfs();
     loadUsers();
     loadUrlSources();
   } else {
@@ -428,13 +425,6 @@ $$('.ptab').forEach(tab => {
 //  INDEX MODE RADIO
 // ════════════════════════════════════════════════════════════════════════════
 
-$$('[name="indexMode"]').forEach(r => {
-  r.addEventListener('change', () => {
-    const single = r.value === 'single' && r.checked;
-    pdfSelectWrap.classList.toggle('hidden',  !single);
-    folderWarnWrap.classList.toggle('hidden',  single);
-  });
-});
 
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -457,36 +447,15 @@ refreshStatsBtn.addEventListener('click', loadStats);
 //  ADMIN: PDF LIST
 // ════════════════════════════════════════════════════════════════════════════
 
-async function loadPdfs() {
-  pdfList.innerHTML = '<p class="muted-text">Loading…</p>';
-  try {
-    const { pdfs = [] } = await apiGet('/api/admin/pdfs');
-    pdfSelect.innerHTML = pdfs.length
-      ? pdfs.map(p => `<option value="${esc(p.path)}">${esc(p.name)}</option>`).join('')
-      : '<option value="">No PDFs found in data folder</option>';
-    pdfList.innerHTML = pdfs.length
-      ? pdfs.map(p => `
-          <div class="pdf-item">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--saffron)" aria-hidden="true">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <span class="pdf-item-name" title="${esc(p.name)}">${esc(p.name)}</span>
-            <span class="pdf-item-size">${fmtSize(p.size)}</span>
-          </div>`).join('')
-      : '<p class="muted-text">No PDFs in data folder.</p>';
-  } catch (err) {
-    pdfList.innerHTML = `<p class="muted-text">Error: ${esc(err.message)}</p>`;
-  }
-}
-refreshPdfsBtn.addEventListener('click', loadPdfs);
-
-
 // ════════════════════════════════════════════════════════════════════════════
-//  ADMIN: UPLOAD
+//  ADMIN: UPLOAD & AUTO-INDEX
 // ════════════════════════════════════════════════════════════════════════════
 
 uploadZone.addEventListener('click',   () => pdfFileInput.click());
 uploadZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') pdfFileInput.click(); });
+$('browseFilesLink').addEventListener('click',  e => { e.stopPropagation(); pdfFileInput.click(); });
+$('browseFolderLink').addEventListener('click', e => { e.stopPropagation(); folderInput.click(); });
+
 uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('drag-over'));
 uploadZone.addEventListener('drop', e => {
@@ -496,16 +465,26 @@ uploadZone.addEventListener('drop', e => {
 });
 pdfFileInput.addEventListener('change', () => {
   const files = [...pdfFileInput.files];
-  if (files.length) uploadFiles(files);
   pdfFileInput.value = '';
+  if (files.length) uploadFiles(files);
+});
+folderInput.addEventListener('change', () => {
+  const files = [...folderInput.files].filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  folderInput.value = '';
+  if (!files.length) { showUploadStatus('No PDF files found in that folder.', 'error'); return; }
+  uploadFiles(files);
 });
 
+// ── Step 1: Upload ────────────────────────────────────────────────────────────
 async function uploadFiles(files) {
-  uploadStatus.classList.remove('hidden', 'success', 'error');
-  uploadStatus.className = 'upload-status';
-  uploadStatus.textContent = `Uploading ${files.length} file(s)…`;
+  uploadedPanel.classList.add('hidden');
+  indexProgress.classList.add('hidden');
+  progressLog.innerHTML = '';
+  uploadZone.style.pointerEvents = 'none';
+  showUploadStatus(`Uploading ${files.length} file(s)…`, '');
 
-  let ok = 0, fail = 0;
+  const uploaded = [];
+  let fail = 0;
   for (const file of files) {
     try {
       const form = new FormData();
@@ -514,70 +493,105 @@ async function uploadFiles(files) {
         method: 'POST', headers: { Authorization: `Bearer ${S.token}` }, body: form,
       });
       if (!r.ok) { const e = await r.json().catch(() => ({ detail: r.statusText })); throw new Error(e.detail); }
-      ok++;
+      uploaded.push(file.name);
     } catch { fail++; }
   }
 
-  uploadStatus.textContent = fail === 0
-    ? `✓ Uploaded ${ok} file(s) successfully.`
-    : `Uploaded ${ok}, failed ${fail}.`;
-  uploadStatus.className = 'upload-status ' + (fail === 0 ? 'success' : 'error');
-  loadPdfs();
+  uploadZone.style.pointerEvents = '';
+  if (!uploaded.length) { showUploadStatus(`Upload failed for all ${fail} file(s).`, 'error'); return; }
+
+  const msg = fail ? `Uploaded ${uploaded.length} of ${files.length} — select which to index:` : `Uploaded ${uploaded.length} file(s) — select which to index:`;
+  showUploadStatus(msg, fail ? '' : 'success');
+  showUploadedPanel(uploaded);
 }
 
+function showUploadedPanel(fileNames) {
+  uploadedList.innerHTML = fileNames.map(name => `
+    <label class="uploaded-item">
+      <input type="checkbox" class="file-chk" data-name="${esc(name)}" checked />
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--saffron)" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <span class="uploaded-item-name">${esc(name)}</span>
+    </label>`).join('');
+  selectAllChk.checked = true;
+  updateSelectedCount();
+  uploadedPanel.classList.remove('hidden');
+}
 
-// ════════════════════════════════════════════════════════════════════════════
-//  ADMIN: INDEXING
-// ════════════════════════════════════════════════════════════════════════════
+function getCheckedFiles() {
+  return [...uploadedList.querySelectorAll('.file-chk:checked')].map(c => c.dataset.name);
+}
 
-indexBtn.addEventListener('click', async () => {
-  const mode    = document.querySelector('[name="indexMode"]:checked')?.value || 'single';
-  const pdfPath = mode === 'single' ? pdfSelect.value : null;
-  if (mode === 'single' && !pdfPath) { alert('Please select a PDF to index.'); return; }
+function updateSelectedCount() {
+  const n = getCheckedFiles().length;
+  const total = uploadedList.querySelectorAll('.file-chk').length;
+  selectedCount.textContent = `${n} of ${total} selected`;
+  indexSelectedBtn.textContent = n ? `→ Index Selected (${n})` : '→ Index Selected';
+  indexSelectedBtn.disabled = n === 0;
+}
 
-  indexProgress.classList.remove('hidden');
-  progressLog.innerHTML = '';
-  addLog('Starting job…');
-  indexBtn.disabled = true;
-
-  try {
-    const job = await apiPost('/api/admin/index', {
-      mode, pdf_path: pdfPath,
-      vectorstore_path: vstorePath.value.trim() || null,
-      data_folder:      dataFolderPath.value.trim() || null,
-    });
-    S.jobId = job.job_id;
-    pollJob();
-  } catch (err) {
-    addLog(`Error: ${err.message}`, 'err');
-    indexBtn.disabled = false;
+selectAllChk.addEventListener('change', () => {
+  uploadedList.querySelectorAll('.file-chk').forEach(c => { c.checked = selectAllChk.checked; });
+  updateSelectedCount();
+});
+uploadedList.addEventListener('change', e => {
+  if (e.target.classList.contains('file-chk')) {
+    const all = uploadedList.querySelectorAll('.file-chk');
+    selectAllChk.checked = [...all].every(c => c.checked);
+    updateSelectedCount();
   }
 });
 
-let _lastLogCount = 0;
-function pollJob() {
-  if (S.jobTimer) clearInterval(S.jobTimer);
-  _lastLogCount = 0;
-  S.jobTimer = setInterval(async () => {
+// ── Step 2: Index selected ────────────────────────────────────────────────────
+indexSelectedBtn.addEventListener('click', async () => {
+  const toIndex = getCheckedFiles();
+  if (!toIndex.length) return;
+  uploadedPanel.classList.add('hidden');
+  indexProgress.classList.remove('hidden');
+  indexSelectedBtn.disabled = true;
+
+  for (let i = 0; i < toIndex.length; i++) {
+    const name = toIndex[i];
+    addLog(`[${i + 1}/${toIndex.length}] Indexing ${name}…`);
     try {
-      const job = await apiGet(`/api/admin/index/${S.jobId}`);
-      job.messages.slice(_lastLogCount).forEach(m => addLog(m));
-      _lastLogCount = job.messages.length;
-      if (job.status === 'done') {
-        addLog('✓ Indexing complete!', 'done');
-        clearInterval(S.jobTimer); S.jobTimer = null;
-        indexBtn.disabled = false; loadStats();
-      } else if (job.status === 'error') {
-        addLog(`✗ ${job.error || 'Unknown error'}`, 'err');
-        clearInterval(S.jobTimer); S.jobTimer = null;
-        indexBtn.disabled = false;
-      }
+      const job = await apiPost('/api/admin/index', { mode: 'single', pdf_path: name });
+      S.jobId = job.job_id;
+      await pollUntilDone();
     } catch (err) {
-      addLog(`Poll error: ${err.message}`, 'err');
-      clearInterval(S.jobTimer); S.jobTimer = null;
-      indexBtn.disabled = false;
+      addLog(`✗ ${name}: ${err.message}`, 'err');
     }
-  }, 1500);
+  }
+
+  addLog(`✓ Done — ${toIndex.length} file(s) indexed.`, 'done');
+  showUploadStatus(`✓ ${toIndex.length} file(s) indexed and ready.`, 'success');
+  loadStats();
+});
+
+function pollUntilDone() {
+  return new Promise((resolve, reject) => {
+    let _last = 0;
+    S.jobTimer = setInterval(async () => {
+      try {
+        const j = await apiGet(`/api/admin/index/${S.jobId}`);
+        j.messages.slice(_last).forEach(m => addLog('  ' + m));
+        _last = j.messages.length;
+        if (j.status === 'done') {
+          clearInterval(S.jobTimer); S.jobTimer = null; resolve();
+        } else if (j.status === 'error') {
+          clearInterval(S.jobTimer); S.jobTimer = null; reject(new Error(j.error));
+        }
+      } catch (err) {
+        clearInterval(S.jobTimer); S.jobTimer = null; reject(err);
+      }
+    }, 1500);
+  });
+}
+
+function showUploadStatus(msg, type) {
+  uploadStatus.textContent = msg;
+  uploadStatus.className = 'upload-status' + (type ? ` ${type}` : '');
+  uploadStatus.classList.remove('hidden');
 }
 
 function addLog(msg, type = '') {

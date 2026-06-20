@@ -874,38 +874,39 @@
 
   <p>Admin users have all user capabilities plus a dedicated <strong>Admin Panel</strong> tab in the web interface with full control over the knowledge base and user management.</p>
 
-  <h3>Knowledge Base Management</h3>
+  <h3>Knowledge Base Management — Two-Step Upload &amp; Index</h3>
+  <p>Adding documents is a deliberate two-step process: upload first, then choose exactly which files to index.</p>
   <div class="card-grid">
     <div class="card card-accent">
       <div class="card-icon">⬆️</div>
-      <h4>Upload PDF</h4>
-      <p>Drag and drop or click to select PDF files from your local machine. Files are uploaded to the server's data folder instantly. Multiple files can be uploaded in one operation.</p>
+      <h4>Step 1 — Upload</h4>
+      <p>Drag and drop PDFs onto the upload zone, click <em>select files</em> to browse your machine, or click <em>select a folder</em> to upload an entire folder at once (sub-folders included). Files are saved to the server immediately.</p>
     </div>
     <div class="card card-blue">
-      <div class="card-icon">⚙️</div>
-      <h4>Index Single PDF</h4>
-      <p>After uploading, select a specific PDF from the dropdown and click Index. Only that file is processed — useful for adding one document without re-processing everything.</p>
+      <div class="card-icon">☑️</div>
+      <h4>Step 2 — Select &amp; Index</h4>
+      <p>A checklist appears showing every file just uploaded, all ticked by default. Untick any you want to skip, then click <strong>Index Selected (N)</strong>. Only the ticked files are processed and added to the knowledge base.</p>
     </div>
     <div class="card card-green">
-      <div class="card-icon">📂</div>
-      <h4>Index Entire Folder</h4>
-      <p>Process all PDFs in the data folder at once. The system automatically removes existing entries for each file before re-indexing to prevent duplicates.</p>
+      <div class="card-icon">📋</div>
+      <h4>Select All / Individual</h4>
+      <p>A <em>Select all</em> checkbox at the top of the checklist toggles every file at once. The Index button label updates live to reflect the count of selected files (e.g., "Index Selected (3)").</p>
     </div>
     <div class="card card-purple">
       <div class="card-icon">🗑️</div>
       <h4>Clear Entire Index</h4>
-      <p>Wipes all vectors and stored documents from the knowledge base. Requires confirmation. Use before a full re-index from scratch.</p>
+      <p>Wipes all vectors and stored documents from the knowledge base. Requires confirmation. Use before a full re-index from scratch. Cannot be undone.</p>
     </div>
   </div>
 
   <h3>Indexing Progress</h3>
-  <p>All indexing operations run as <strong>background jobs</strong>. A live log panel shows real-time progress messages:</p>
+  <p>Each selected file is indexed as a separate <strong>background job</strong>, processed one at a time in sequence. A live log panel below the upload zone shows real-time progress:</p>
   <ul class="feature-list">
-    <li>Each PDF file being processed</li>
-    <li>How many text chunks, tables, and images were extracted</li>
-    <li>Summarization progress (e.g., "Summarizing 24 text chunks...")</li>
-    <li>Completion confirmation with total counts</li>
-    <li>Any errors for individual files (other files continue processing)</li>
+    <li><strong>[1/3] Indexing filename.pdf…</strong> — counter shows current file out of total selected</li>
+    <li>How many text chunks, tables, and images were extracted from each file</li>
+    <li>Summarization progress per file (e.g., "Summarizing 24 text chunks…")</li>
+    <li>Errors for individual files shown inline — remaining files continue processing</li>
+    <li><strong>✓ Done — N file(s) indexed.</strong> — confirmation when all selected files complete</li>
   </ul>
 
   <h3>Statistics Dashboard</h3>
@@ -955,59 +956,59 @@
         <td>Fetches the latest statistics from the server. Use this after indexing completes to confirm the counts updated correctly.</td>
       </tr>
       <tr>
-        <td><strong>Drop PDF or browse</strong> zone</td>
-        <td>UPLOAD PDF</td>
-        <td>Drag and drop one or more PDF files onto this area, or click "browse" to open a file picker. Files are sent from your browser to the server and saved into the server's configured <code>DATA_FOLDER</code>. Only <code>.pdf</code> files are accepted.</td>
+        <td><strong>Upload &amp; Index PDFs</strong> (section title)</td>
+        <td>Knowledge tab</td>
+        <td>The single section that handles both uploading and indexing. Combines what were previously two separate sections into one streamlined two-step flow.</td>
       </tr>
       <tr>
-        <td><strong>Multiple files supported</strong></td>
-        <td>UPLOAD PDF</td>
-        <td>You can select or drop several PDFs at once. Each file is uploaded sequentially and a success/failure count is shown after upload.</td>
+        <td><strong>Drop PDFs or select files</strong> zone</td>
+        <td>UPLOAD &amp; INDEX — Step 1</td>
+        <td>Drag and drop PDF files onto this area to start Step 1. Alternatively click <em>select files</em> to open a file browser, or <em>select a folder</em> to pick an entire folder — all PDFs inside (including sub-folders) are uploaded. Only <code>.pdf</code> files are accepted.</td>
       </tr>
       <tr>
-        <td><strong>Single PDF</strong> (radio)</td>
-        <td>INDEX DOCUMENTS</td>
-        <td>When selected, only the PDF chosen in the dropdown below will be indexed. Use this when you want to add or update one specific document without touching the rest of the knowledge base. The old entries for that file are automatically removed first.</td>
+        <td><strong>select files</strong> link</td>
+        <td>Upload zone</td>
+        <td>Opens a standard file picker. Multiple files can be selected at once with Ctrl/Cmd+click or Shift+click.</td>
       </tr>
       <tr>
-        <td><strong>Entire Folder</strong> (radio)</td>
-        <td>INDEX DOCUMENTS</td>
-        <td>When selected, every PDF in the server's <code>DATA_FOLDER</code> is indexed in alphabetical order. For each file, existing entries are removed first, then fresh chunks are generated — so this is safe to run multiple times without creating duplicates.</td>
+        <td><strong>select a folder</strong> link</td>
+        <td>Upload zone</td>
+        <td>Opens a folder picker. Every PDF in the selected folder and its sub-folders is uploaded. Non-PDF files are silently ignored.</td>
       </tr>
       <tr>
-        <td><strong>PDF Dropdown</strong> (e.g., "1502 map.pdf")</td>
-        <td>INDEX DOCUMENTS (Single mode)</td>
-        <td>Lists all PDF files currently in the server's data folder. Select the file you want to index. This list refreshes automatically after each upload.</td>
+        <td><strong>Uploaded N file(s) — select which to index</strong></td>
+        <td>Status message (after upload)</td>
+        <td>Appears immediately after all files finish uploading. Signals that Step 1 is complete and Step 2 (the checklist) is now ready.</td>
       </tr>
       <tr>
-        <td><strong>▼ Advanced Paths</strong></td>
-        <td>INDEX DOCUMENTS</td>
-        <td>A collapsible section revealing optional override fields. Click to expand. Normally leave these empty — the server uses its defaults from <code>.env</code>.</td>
+        <td><strong>Select all</strong> checkbox</td>
+        <td>UPLOAD &amp; INDEX — Step 2 checklist</td>
+        <td>Ticks or unticks every file in the checklist at once. Starts checked (all files selected) after a fresh upload.</td>
       </tr>
       <tr>
-        <td><strong>Vector store path</strong> field (e.g., "test_data")</td>
-        <td>Advanced Paths</td>
-        <td>Override the directory where ChromaDB stores its vectors and the docstore. Leave blank to use the server default (<code>VECTORSTORE_PATH</code> from <code>.env</code>). Useful for maintaining <strong>multiple separate knowledge bases</strong> — e.g., one for testing ("test_data") and one for production ("vectorstore").</td>
+        <td><strong>N of M selected</strong> counter</td>
+        <td>Step 2 checklist header</td>
+        <td>Updates live as individual checkboxes are toggled, showing how many files are currently selected out of the total uploaded.</td>
       </tr>
       <tr>
-        <td><strong>Data folder path</strong> field</td>
-        <td>Advanced Paths</td>
-        <td>Override the server folder scanned for PDFs during "Entire Folder" indexing. Leave blank to use the server default (<code>DATA_FOLDER</code> from <code>.env</code>).</td>
+        <td><strong>File checklist</strong> (one row per file)</td>
+        <td>Step 2</td>
+        <td>Each uploaded PDF appears as a ticked row. Untick any file to exclude it from indexing — it remains on the server but will not be added to the knowledge base during this operation.</td>
       </tr>
       <tr>
-        <td><strong>Index</strong> button</td>
-        <td>INDEX DOCUMENTS</td>
-        <td>Starts the indexing background job. A live log panel appears below showing progress. The button is disabled while a job is running to prevent duplicate submissions.</td>
-      </tr>
-      <tr>
-        <td><strong>Clear Entire Index</strong> button</td>
-        <td>INDEX DOCUMENTS</td>
-        <td>Permanently deletes all vectors from ChromaDB and clears the docstore. A confirmation dialog appears before proceeding. Use this before a full re-index from scratch. <strong>Cannot be undone.</strong></td>
+        <td><strong>Index Selected (N)</strong> button</td>
+        <td>Step 2 — below checklist</td>
+        <td>Starts indexing the ticked files. The number in parentheses reflects the current selection count. The button is disabled when nothing is selected. Clicking it hides the checklist and shows the live progress log.</td>
       </tr>
       <tr>
         <td><strong>Progress Log</strong> panel</td>
-        <td>Below Index button</td>
-        <td>Live scrolling log showing what the indexing job is doing: which PDF is being processed, how many chunks/tables/images were found, summarization progress, and final counts. Errors for individual files are shown in red while processing continues for remaining files.</td>
+        <td>Below upload zone (during indexing)</td>
+        <td>Live scrolling log showing indexing progress. Each file is prefixed with its position (e.g., <code>[2/5] Indexing report.pdf…</code>). Errors for individual files are shown inline in red — remaining files continue. Final line confirms completion.</td>
+      </tr>
+      <tr>
+        <td><strong>Clear Entire Index</strong> button</td>
+        <td>Danger Zone section</td>
+        <td>Permanently deletes all vectors from ChromaDB and clears the docstore. A confirmation dialog appears before proceeding. Use before a full re-index from scratch. <strong>Cannot be undone.</strong></td>
       </tr>
     </tbody>
   </table>
@@ -1487,17 +1488,11 @@
     <dt>Summary Vectors vs Docstore Entries</dt>
     <dd>These two numbers in the admin stats should be close but not necessarily equal. Summary Vectors = searchable index size (how many things the AI can find). Docstore Entries = storage size (how many full documents are retrievable). Images may have docstore entries without separate summary vectors if they share a vector with their parent text chunk.</dd>
 
-    <dt>Single PDF Mode</dt>
-    <dd>Indexing mode where only one selected PDF is processed. The system first removes all existing entries for that file (by matching the source path), then re-indexes it fresh. All other documents in the knowledge base are untouched. Ideal for updating one changed document.</dd>
+    <dt>Two-Step Upload &amp; Index</dt>
+    <dd>The admin workflow for adding PDFs to the knowledge base. Step 1: upload files via the browser (drag-and-drop, file picker, or folder picker). Step 2: a checklist of the just-uploaded files appears — tick the ones to process, then click <em>Index Selected</em>. Only files uploaded in the current session are shown; pre-existing server files are not exposed. This prevents accidentally re-indexing or indexing unintended files.</dd>
 
-    <dt>Entire Folder Mode</dt>
-    <dd>Indexing mode where every PDF in the configured data folder is processed sequentially. For each file, existing entries are removed before new ones are added — making this safe to re-run without creating duplicates. Suitable for initial full knowledge base population or bulk updates.</dd>
-
-    <dt>Advanced Paths</dt>
-    <dd>Optional admin panel fields to override the server's default storage paths for a specific indexing job. <strong>Vector store path</strong> changes where ChromaDB writes/reads. <strong>Data folder path</strong> changes which folder is scanned for PDFs. Leaving both blank uses the server's <code>.env</code> defaults. Useful for maintaining separate test and production knowledge bases on the same server.</dd>
-
-    <dt>Background Job</dt>
-    <dd>Indexing always runs as a background thread on the server — it does not block the web interface or other users from chatting while it runs. The admin panel polls the job status every 1.5 seconds and shows live log output. The Index button is disabled while a job is running to prevent duplicate submissions.</dd>
+    <dt>Per-File Background Job</dt>
+    <dd>Each file selected in Step 2 is submitted as a separate background indexing job and processed sequentially. The live progress log shows <code>[1/3] Indexing…</code>, <code>[2/3] Indexing…</code>, etc. Errors for one file do not stop the others. The job polls every 1.5 seconds for status updates. All other users can continue chatting while indexing runs.</dd>
 
     <dt>Web URL Sources</dt>
     <dd>Admin-configured web page URLs stored in the <code>url_sources</code> database table. Unlike PDFs, they are not indexed into the vector store. Instead, their content is fetched at query time and injected directly into the LLM's prompt alongside PDF context — the same approach used by ChatGPT browsing and Claude document reading. Useful for live reference pages, official documentation, or any web content that should always be available to the AI regardless of the user's question.</dd>

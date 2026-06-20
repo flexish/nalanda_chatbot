@@ -238,48 +238,32 @@
           </section>
 
           <section class="panel-section">
-            <h3 class="section-title">Upload PDF</h3>
+            <h3 class="section-title">Upload &amp; Index PDFs</h3>
             <div class="upload-zone" id="uploadZone" role="button" tabindex="0">
               <input type="file" id="pdfFileInput" accept=".pdf" multiple hidden />
+              <input type="file" id="folderInput" webkitdirectory hidden />
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-              <p>Drop PDF or <span class="link-look">browse</span></p>
-              <small>Multiple files supported</small>
+              <p>Drop PDFs or <span class="link-look" id="browseFilesLink">select files</span></p>
+              <small>or <span class="link-look" id="browseFolderLink">select a folder</span> &nbsp;·&nbsp; indexed automatically after upload</small>
             </div>
             <div id="uploadStatus" class="upload-status hidden"></div>
-          </section>
 
-          <section class="panel-section">
-            <h3 class="section-title">Index Documents</h3>
-            <div class="radio-group">
-              <label class="radio-opt"><input type="radio" name="indexMode" value="single" checked /><span>Single PDF</span></label>
-              <label class="radio-opt"><input type="radio" name="indexMode" value="folder" /><span>Entire folder</span></label>
+            <!-- Step 2: select which uploaded files to index -->
+            <div id="uploadedPanel" class="uploaded-panel hidden">
+              <div class="uploaded-panel-header">
+                <label class="chk-label"><input type="checkbox" id="selectAllChk" checked /><span>Select all</span></label>
+                <span id="selectedCount" class="muted-badge"></span>
+              </div>
+              <div id="uploadedList" class="uploaded-list"></div>
+              <button id="indexSelectedBtn" class="btn-primary full" style="margin-top:10px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                Index Selected
+              </button>
             </div>
-            <div id="pdfSelectWrap">
-              <select id="pdfSelect" class="select-field"><option value="">— select a PDF —</option></select>
-            </div>
-            <div id="folderWarnWrap" class="hidden">
-              <p class="warn-box">⚠ Full-folder indexing uses hi-res extraction and can take several minutes per file.</p>
-            </div>
-            <details class="path-details">
-              <summary>Advanced paths</summary>
-              <div class="field-wrap mt8"><input type="text" id="vstorePath" placeholder=" " /><label>Vector store path</label></div>
-              <div class="field-wrap mt8"><input type="text" id="dataFolderPath" placeholder=" " /><label>Data folder</label></div>
-            </details>
-            <button id="indexBtn" class="btn-primary full">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              Build / Update Index
-            </button>
+
             <div id="indexProgress" class="progress-panel hidden">
               <div id="progressLog" class="progress-log"></div>
             </div>
-          </section>
-
-          <section class="panel-section">
-            <div class="section-title-row">
-              <h3 class="section-title">Available PDFs</h3>
-              <button id="refreshPdfsBtn" class="btn-icon-sm" title="Refresh">↻</button>
-            </div>
-            <div id="pdfList" class="pdf-list"><p class="muted-text">Loading…</p></div>
           </section>
 
           <section class="panel-section">
