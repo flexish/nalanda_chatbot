@@ -9,9 +9,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from utils.config import (
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL,
     GROQ_API_KEY,
     GROQ_MODEL,
     IMAGE_SUMMARY_PROMPT,
+    LLM_PROVIDER,
     OPENAI_API_KEY,
     OPENAI_MODEL,
     SUMMARIZE_CONCURRENCY,
@@ -22,9 +25,11 @@ from utils.ingest import ParentDocument
 
 def _text_summarizer():
     prompt = ChatPromptTemplate.from_template(TEXT_SUMMARY_PROMPT)
-    if GROQ_API_KEY:
+    if LLM_PROVIDER == "anthropic" and ANTHROPIC_API_KEY:
+        from langchain_anthropic import ChatAnthropic
+        model = ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
+    elif GROQ_API_KEY:
         from langchain_groq import ChatGroq
-
         model = ChatGroq(temperature=0.5, model=GROQ_MODEL, api_key=GROQ_API_KEY)
     else:
         model = ChatOpenAI(temperature=0.5, model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
@@ -45,7 +50,11 @@ def _image_summarizer():
         )
     ]
     prompt = ChatPromptTemplate.from_messages(messages)
-    model = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
+    if LLM_PROVIDER == "anthropic" and ANTHROPIC_API_KEY:
+        from langchain_anthropic import ChatAnthropic
+        model = ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
+    else:
+        model = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
     return prompt | model | StrOutputParser()
 
 

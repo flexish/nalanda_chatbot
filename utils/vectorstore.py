@@ -18,6 +18,7 @@ from langchain_openai import OpenAIEmbeddings
 from utils.config import (
     COLLECTION_NAME,
     DOCSTORE_FILENAME,
+    EMBEDDING_BACKEND,
     OPENAI_API_KEY,
     OPENAI_EMBEDDING_MODEL,
     TOP_K,
@@ -52,12 +53,19 @@ class MultimodalVectorStore:
         self.collection_name = collection_name
         self.id_key = "doc_id"
 
-        self.vectorstore = Chroma(
-            collection_name=collection_name,
-            embedding_function=OpenAIEmbeddings(
+        if EMBEDDING_BACKEND == "huggingface":
+            from langchain_huggingface import HuggingFaceEmbeddings
+            embedding_fn = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+        else:
+            embedding_fn = OpenAIEmbeddings(
                 model=OPENAI_EMBEDDING_MODEL,
                 api_key=OPENAI_API_KEY,
-            ),
+            )
+        self.vectorstore = Chroma(
+            collection_name=collection_name,
+            embedding_function=embedding_fn,
             persist_directory=str(self.persist_dir),
         )
         self.docstore = PersistentDocstore(self.persist_dir / DOCSTORE_FILENAME)

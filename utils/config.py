@@ -12,12 +12,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_FOLDER = Path(os.getenv("DATA_FOLDER", "./data"))
 VECTORSTORE_PATH = Path(os.getenv("VECTORSTORE_PATH", "./vectorstore"))
 
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")  # "openai" | "anthropic"
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-6")
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "openai")  # "openai" | "huggingface"
 
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "multi_modal_rag")
 DOCSTORE_FILENAME = "docstore.pkl"

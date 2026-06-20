@@ -15,7 +15,15 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from PIL import Image
 
-from utils.config import ANSWER_PROMPT_TEMPLATE, OPENAI_API_KEY, OPENAI_MODEL, TOP_K
+from utils.config import (
+    ANSWER_PROMPT_TEMPLATE,
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL,
+    LLM_PROVIDER,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    TOP_K,
+)
 from utils.vectorstore import MultimodalVectorStore
 
 
@@ -759,7 +767,11 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
     k = top_k or TOP_K
     retriever = store.retriever
     retriever.search_kwargs = {"k": max(k, 8)}
-    llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
+    if LLM_PROVIDER == "anthropic" and ANTHROPIC_API_KEY:
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
+    else:
+        llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
 
     def retrieve_node(state: RAGState) -> dict[str, Any]:
         question = state["question"]
