@@ -1494,20 +1494,27 @@ async def astream_rag_response(
         }
         return
 
-    # Cross-check: verify LOCAL images match the query before showing them.
-    # Web images (web_searched=True) already used the specific subject as their search query
-    # so they are trusted and skip this check.
-    if context.get("images") and not web_searched:
+    # Cross-check: verify images match the query before showing them.
+    # Local images get a strict check; web images get a lenient check (they were already
+    # searched with the specific subject, so false positives are less common).
+    if context.get("images"):
         import asyncio
         subject = _query_without_image_noise(question).strip() or question
 
-        async def _check_image(b64: str) -> bool:
-            check_prompt = (
-                f"Does this image SPECIFICALLY and CLEARLY depict '{subject}'?\n"
-                f"Reply YES only if the image is a direct, clear match for this subject.\n"
-                f"Reply NO if the image is only loosely related, generic, or shows something else.\n"
-                f"Reply only YES or NO."
-            )
+        async def _check_image(b64: str, strict: bool = True) -> bool:
+            if strict:
+                check_prompt = (
+                    f"Does this image SPECIFICALLY and CLEARLY depict '{subject}'?\n"
+                    f"Reply YES only if the image is a direct, clear match.\n"
+                    f"Reply NO if it is only loosely related, generic, or shows something else.\n"
+                    f"Reply only YES or NO."
+                )
+            else:
+                check_prompt = (
+                    f"Is this image related to '{subject}'?\n"
+                    f"Reply YES if it is reasonably related. Reply NO only if it is clearly unrelated.\n"
+                    f"Reply only YES or NO."
+                )
             try:
                 check_msg = HumanMessage(content=[
                     {"type": "text", "text": check_prompt},
@@ -1519,11 +1526,12 @@ async def astream_rag_response(
             except Exception:
                 return True  # fail open
 
-        image_matches = await _check_image(context["images"][0])
+        # Strict check for local images; lenient for web images
+        image_matches = await _check_image(context["images"][0], strict=not web_searched)
 
         if not image_matches:
-            if mode == "image":
-                # Try web fallback before giving up
+            if mode == "image" and not web_searched:
+                # Local image failed — try web fallback
                 retrieval_q = retrieved.get("retrieval_question") or question
                 web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
                 if web_imgs:
@@ -1531,25 +1539,23 @@ async def astream_rag_response(
                     context["images"] = [b64 for b64, _ in web_imgs]
                     context["image_captions"] = [cap for _, cap in web_imgs]
                     web_searched = True
-                    # Web image was searched with the specific subject — trust it, no re-check
-                else:
-                    # No web image either — give up
-                    context = dict(context)
-                    context["images"] = []
-                    context["image_captions"] = []
+                    # Lenient check on web fallback image
+                    image_matches = await _check_image(context["images"][0], strict=False)
+
+            if not image_matches:
+                context = dict(context)
+                context["images"] = []
+                context["image_captions"] = []
+                if mode == "image":
                     yield {
                         "type": "done",
                         "answer": f"No relevant images of '{subject}' were found in the knowledge base or on the web.",
                         "images": [], "captions": [], "mode": mode,
-                        "verified": False, "verification_reason": "image mismatch, no web fallback",
-                        "web_searched": False,
+                        "verified": False, "verification_reason": "image mismatch after cross-check",
+                        "web_searched": web_searched,
                     }
                     return
-            else:
-                # Text mode: drop the irrelevant image, continue with text answer
-                context = dict(context)
-                context["images"] = []
-                context["image_captions"] = []
+                # Text mode: drop irrelevant image, continue with text answer
 
     messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs, web_searched=web_searched)
     full_response = ""
