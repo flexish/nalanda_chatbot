@@ -24,6 +24,9 @@ from utils.config import (
     MAX_ITERATIVE_HOPS,
     OPENAI_API_KEY,
     OPENAI_MODEL,
+    OPENROUTER_API_KEY,
+    OPENROUTER_BASE_URL,
+    OPENROUTER_MODEL,
     RERANKER_MODEL,
     TOP_K,
     WEB_SEARCH_MAX_RESULTS,
@@ -36,6 +39,8 @@ def _build_llm() -> Any:
     if LLM_PROVIDER == "anthropic" and ANTHROPIC_API_KEY:
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY)
+    if LLM_PROVIDER == "openrouter" and OPENROUTER_API_KEY:
+        return ChatOpenAI(model=OPENROUTER_MODEL, api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
     return ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY)
 
 

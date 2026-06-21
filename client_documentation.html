@@ -469,7 +469,7 @@
       <tr><td><strong>LangGraph</strong></td><td>≥ 0.2</td><td>Graph-based state machine that orchestrates the Retrieve → Generate → Verify → Iterate pipeline as a directed graph with conditional edges</td></tr>
       <tr><td><strong>OpenAI GPT-4o</strong></td><td>API</td><td>Primary LLM for answer generation, query rewriting, multi-query expansion, HyDE, self-RAG verification, and iterative retrieval</td></tr>
       <tr><td><strong>Anthropic Claude</strong></td><td>API (optional)</td><td>Alternative LLM provider — switchable via environment variable with no code changes</td></tr>
-      <tr><td><strong>Groq (LLaMA)</strong></td><td>API (optional)</td><td>Fast inference alternative for text summarization during ingestion</td></tr>
+      <tr><td><strong>OpenRouter</strong></td><td>API (optional)</td><td>Unified gateway to 200+ models (LLaMA, Mistral, Gemma, etc.) — switchable via <code>LLM_PROVIDER=openrouter</code> with no code changes</td></tr>
       <tr><td><strong>OpenAI text-embedding-3-small</strong></td><td>API</td><td>Converts text and query summaries into vector embeddings for semantic similarity search</td></tr>
       <tr><td><strong>sentence-transformers</strong></td><td>≥ 3.0</td><td>Provides the cross-encoder re-ranking model (ms-marco-MiniLM-L-6-v2) and optional HuggingFace embedding backend</td></tr>
       <tr><td><strong>Unstructured</strong></td><td>≥ 0.16</td><td>High-resolution PDF parsing — extracts text blocks, tables, and embedded images from complex multi-column PDFs</td></tr>
@@ -1317,13 +1317,14 @@
       <tr><th>Variable</th><th>Description</th><th>Default</th></tr>
     </thead>
     <tbody>
-      <tr><td>LLM_PROVIDER</td><td>LLM provider: <code>openai</code> or <code>anthropic</code></td><td>openai</td></tr>
+      <tr><td>LLM_PROVIDER</td><td>LLM provider: <code>openai</code>, <code>anthropic</code>, or <code>openrouter</code></td><td>openai</td></tr>
       <tr><td>OPENAI_API_KEY</td><td>OpenAI API key (required when LLM_PROVIDER=openai)</td><td>—</td></tr>
-      <tr><td>OPENAI_MODEL</td><td>OpenAI model name</td><td>gpt-4o</td></tr>
+      <tr><td>OPENAI_MODEL</td><td>OpenAI model name</td><td>gpt-4o-mini</td></tr>
       <tr><td>OPENAI_EMBEDDING_MODEL</td><td>OpenAI embedding model</td><td>text-embedding-3-small</td></tr>
       <tr><td>ANTHROPIC_API_KEY</td><td>Anthropic API key (required when LLM_PROVIDER=anthropic)</td><td>—</td></tr>
       <tr><td>ANTHROPIC_MODEL</td><td>Claude model name</td><td>claude-opus-4-6</td></tr>
-      <tr><td>GROQ_API_KEY</td><td>Groq API key (optional, used for fast text summarization)</td><td>—</td></tr>
+      <tr><td>OPENROUTER_API_KEY</td><td>OpenRouter API key (required when LLM_PROVIDER=openrouter)</td><td>—</td></tr>
+      <tr><td>OPENROUTER_MODEL</td><td>OpenRouter model slug (e.g. <code>meta-llama/llama-3.1-8b-instruct</code>)</td><td>meta-llama/llama-3.1-8b-instruct</td></tr>
       <tr><td>EMBEDDING_BACKEND</td><td>Embedding provider: <code>openai</code> or <code>huggingface</code></td><td>openai</td></tr>
       <tr><td>VECTORSTORE_PATH</td><td>Directory where ChromaDB and docstore are persisted</td><td>./vectorstore</td></tr>
       <tr><td>DATA_FOLDER</td><td>Directory where uploaded PDFs are stored</td><td>./data</td></tr>
@@ -1369,16 +1370,17 @@
       <p>Claude Opus/Sonnet used as drop-in replacement for all LLM calls. Set <code>LLM_PROVIDER=anthropic</code> and provide <code>ANTHROPIC_API_KEY</code>.</p>
     </div>
     <div class="card card-purple">
-      <div class="card-icon">⚡</div>
-      <h4>Groq (Partial)</h4>
-      <p>Used specifically for text summarization during indexing when <code>GROQ_API_KEY</code> is set. Very fast inference for batch summarization jobs.</p>
+      <div class="card-icon">🔀</div>
+      <h4>OpenRouter</h4>
+      <p>Unified gateway to 200+ models (LLaMA, Mistral, Gemma, Qwen, etc.). Set <code>LLM_PROVIDER=openrouter</code>, provide <code>OPENROUTER_API_KEY</code>, and choose any model via <code>OPENROUTER_MODEL</code>. Vision-capable models also handle image summarization during indexing.</p>
     </div>
   </div>
 
   <h3>Provider Priority Logic</h3>
   <ul class="feature-list">
-    <li><strong>LLM for generation/RAG:</strong> checks <code>LLM_PROVIDER</code> → uses Anthropic if set to "anthropic" with valid key, otherwise OpenAI</li>
-    <li><strong>LLM for summarization:</strong> checks Anthropic first → then Groq → then OpenAI (falls through to always find a working provider)</li>
+    <li><strong>LLM for generation / RAG:</strong> reads <code>LLM_PROVIDER</code> → <code>anthropic</code> uses Claude, <code>openrouter</code> uses OpenRouter, default uses OpenAI</li>
+    <li><strong>LLM for text summarization:</strong> same provider as generation — Anthropic, OpenRouter, or OpenAI</li>
+    <li><strong>LLM for image summarization:</strong> same provider; if the configured model does not support vision, images are stored with a placeholder caption and indexing continues</li>
     <li><strong>Embeddings:</strong> checks <code>EMBEDDING_BACKEND</code> → HuggingFace (local, free) or OpenAI API</li>
     <li><strong>Re-ranking:</strong> always local (sentence-transformers cross-encoder, no API cost)</li>
   </ul>
