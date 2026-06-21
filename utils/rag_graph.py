@@ -1451,42 +1451,58 @@ async def astream_rag_response(
 
     # Cross-check: for local images only, verify the image actually matches the query.
     # If not, fall back to web image search before calling the main LLM.
-    if mode == "image" and context.get("images") and not web_searched:
+    if context.get("images"):
         import asyncio
         subject = _query_without_image_noise(question).strip() or question
-        check_prompt = f"Does this image depict or represent '{subject}'? Reply only YES or NO."
-        try:
-            check_msg = HumanMessage(content=[
-                {"type": "text", "text": check_prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{context['images'][0]}"}},
-            ])
-            check_result = await asyncio.to_thread(llm.invoke, [check_msg])
-            answer_text = (check_result.content if hasattr(check_result, "content") else str(check_result)).strip().upper()
-            image_matches = "YES" in answer_text
-        except Exception:
-            image_matches = True  # fail open: if check fails, proceed normally
+
+        async def _check_image(b64: str) -> bool:
+            check_prompt = (
+                f"Does this image SPECIFICALLY and CLEARLY depict '{subject}'?\n"
+                f"Reply YES only if the image is a direct, clear match for this subject.\n"
+                f"Reply NO if the image is only loosely related, generic, or shows something else.\n"
+                f"Reply only YES or NO."
+            )
+            try:
+                check_msg = HumanMessage(content=[
+                    {"type": "text", "text": check_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ])
+                result = await asyncio.to_thread(llm.invoke, [check_msg])
+                text = (result.content if hasattr(result, "content") else str(result)).strip().upper()
+                return "YES" in text
+            except Exception:
+                return True  # fail open
+
+        image_matches = await _check_image(context["images"][0])
 
         if not image_matches:
-            retrieval_q = retrieved.get("retrieval_question") or question
-            web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
-            if web_imgs:
-                context = {
-                    "images": [b64 for b64, _ in web_imgs],
-                    "texts": [],
-                    "image_captions": [cap for _, cap in web_imgs],
-                }
-                web_searched = True
-                pre_verified = True
-                pre_reason = "image verified via web search fallback"
-            else:
-                yield {
-                    "type": "done",
-                    "answer": f"No images of '{subject}' were found in the indexed documents or on the web.",
-                    "images": [], "captions": [], "mode": mode,
-                    "verified": False, "verification_reason": "local image mismatch, no web fallback",
-                    "web_searched": False,
-                }
-                return
+            if mode == "image" and not web_searched:
+                # Image requests only: try web fallback, preserve text context
+                retrieval_q = retrieved.get("retrieval_question") or question
+                web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
+                if web_imgs:
+                    context = dict(context)
+                    context["images"] = [b64 for b64, _ in web_imgs]
+                    context["image_captions"] = [cap for _, cap in web_imgs]
+                    web_searched = True
+                    image_matches = await _check_image(context["images"][0])
+
+            if not image_matches:
+                # Drop images — never show a wrong image
+                context = dict(context)
+                context["images"] = []
+                context["image_captions"] = []
+                if mode == "image":
+                    # Pure image request with no valid image found
+                    yield {
+                        "type": "done",
+                        "answer": f"No relevant images of '{subject}' were found in the knowledge base or on the web.",
+                        "images": [], "captions": [], "mode": mode,
+                        "verified": False, "verification_reason": "image mismatch after cross-check",
+                        "web_searched": web_searched,
+                    }
+                    return
+                # Text mode: just continue without the image — LLM answers from text context
 
     messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs, web_searched=web_searched)
     full_response = ""
