@@ -78,6 +78,7 @@ def _render_assistant_message(message: dict) -> None:
         captions = message.get("captions", []) or []
         verified = message.get("verified")
         verification_reason = (message.get("verification_reason") or "").strip()
+        web_searched = message.get("web_searched", False)
 
         if content:
             st.markdown(
@@ -93,6 +94,9 @@ def _render_assistant_message(message: dict) -> None:
                     f'<div class="image-caption">{html.escape(caption or "Description unavailable.")}</div>',
                     unsafe_allow_html=True,
                 )
+
+        if web_searched:
+            st.caption("Web search used — local documents did not contain sufficient information.")
 
         if verified is not None:
             label = "Verified" if verified else "Not verified"
@@ -239,6 +243,7 @@ if question:
                     "captions": captions,
                     "verified": result.get("verified"),
                     "verification_reason": result.get("verification_reason", ""),
+                    "web_searched": result.get("web_searched", False),
                 }
         except Exception as exc:
             assistant_message = {

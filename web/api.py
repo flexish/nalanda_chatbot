@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import database as db
 
-from utils.config import TOP_K, VECTORSTORE_PATH, DATA_FOLDER, DOCSTORE_FILENAME
+from utils.config import TOP_K, VECTORSTORE_PATH, DATA_FOLDER, DOCSTORE_FILENAME, ENABLE_WEB_SEARCH
 from utils.rag_graph import query_with_sources, astream_rag_response
 from utils.vectorstore import MultimodalVectorStore
 
@@ -161,6 +161,7 @@ class ChatResponse(BaseModel):
     mode: str
     verified: bool
     verification_reason: str
+    web_searched: bool = False
 
 class IndexRequest(BaseModel):
     mode: Literal["single", "folder"] = "single"
@@ -231,7 +232,8 @@ def chat(
 ) -> ChatResponse:
     _get_session(authorization)
     store = _load_store(None)
-    if store.stats()["summary_vectors"] == 0:
+    is_empty = store.stats()["summary_vectors"] == 0
+    if is_empty and not ENABLE_WEB_SEARCH:
         return ChatResponse(
             answer="The knowledge base is empty. Please ask an administrator to index the documents.",
             images=[], captions=[], mode="text",
@@ -256,6 +258,7 @@ def chat(
         mode=result.get("mode", "text"),
         verified=bool(result.get("verified", True)),
         verification_reason=result.get("verification_reason", ""),
+        web_searched=bool(result.get("web_searched", False)),
     )
 
 
@@ -278,9 +281,9 @@ async def chat_stream(
         fetch_urls_cached, [r["url"] for r in url_records]
     ) if url_records else []
 
-    if store.stats()["summary_vectors"] == 0 and not web_docs:
+    if store.stats()["summary_vectors"] == 0 and not web_docs and not ENABLE_WEB_SEARCH:
         async def _empty():
-            yield f"data: {json.dumps({'type': 'done', 'answer': 'The knowledge base is empty. Please ask an administrator to index the documents.', 'images': [], 'captions': [], 'mode': 'text', 'verified': False, 'verification_reason': 'empty vector store'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'answer': 'The knowledge base is empty. Please ask an administrator to index the documents.', 'images': [], 'captions': [], 'mode': 'text', 'verified': False, 'verification_reason': 'empty vector store', 'web_searched': False})}\n\n"
         return StreamingResponse(_empty(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

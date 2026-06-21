@@ -118,12 +118,49 @@ def _retrieval_quality_score(docs: list[Any]) -> float:
     return min(1.0, total / 800)
 
 
-def _web_search(query: str) -> list[ParentDocument]:
-    """DuckDuckGo search returning results as ParentDocuments."""
+def _web_image_search(query: str, max_results: int = 4) -> list[tuple[str, str]]:
+    """Fetch images from the web via DuckDuckGo. Returns (base64, caption) tuples."""
     if not ENABLE_WEB_SEARCH:
         return []
     try:
-        from duckduckgo_search import DDGS
+        import requests as _requests
+        from base64 import b64encode
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            raw = list(ddgs.images(query, max_results=max_results * 3))
+        results: list[tuple[str, str]] = []
+        for r in raw:
+            if len(results) >= max_results:
+                break
+            url = r.get("thumbnail") or r.get("image", "")
+            if not url:
+                continue
+            try:
+                resp = _requests.get(url, timeout=5, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code == 200 and resp.content:
+                    b64 = b64encode(resp.content).decode()
+                    if _is_renderable_image(b64):
+                        caption = (r.get("title") or f"Image from {r.get('source', 'web')}").strip()
+                        results.append((b64, caption))
+            except Exception:
+                continue
+        return results
+    except Exception:
+        return []
+
+
+def _web_search(query: str) -> list[ParentDocument]:
+    """Web search returning results as ParentDocuments (uses ddgs / duckduckgo_search)."""
+    if not ENABLE_WEB_SEARCH:
+        return []
+    try:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=WEB_SEARCH_MAX_RESULTS))
         docs = []
@@ -152,6 +189,7 @@ class RAGState(TypedDict, total=False):
     verification_reason: str
     hops: int
     web_docs: list[Any]  # admin-configured URL content injected directly into LLM prompt
+    web_searched: bool   # True once the internet-fallback node has run
 
 
 IMAGE_QUERY_HINTS = (
@@ -889,6 +927,7 @@ def build_multimodal_messages(
     question: str,
     chat_history: str = "",
     web_docs: list[Any] | None = None,
+    web_searched: bool = False,
 ) -> list[HumanMessage]:
     context_text = ""
     for text_element in context.get("texts", []):
@@ -901,6 +940,13 @@ def build_multimodal_messages(
         context_text=context_text,
         question=question,
     )
+
+    if web_searched:
+        prompt_template = (
+            "Note: The local documents did not contain sufficient information for this question. "
+            "The following context was retrieved from the internet — use it to answer as best you can "
+            "and mention that your answer is based on web sources.\n\n"
+        ) + prompt_template
 
     # Inject admin-configured URL content directly into the prompt (ChatGPT/Claude browsing style).
     # URL content bypasses vector search — it is always included and the LLM reasons over it directly.
@@ -1046,6 +1092,20 @@ def _run_retrieve(
             "retrieval_question": retrieval_question,
         }
 
+    # Web image fallback: no local images found for an image request
+    if _is_image_request(question) and ENABLE_WEB_SEARCH:
+        web_images = _web_image_search(retrieval_question)
+        if web_images:
+            images = [b64 for b64, _ in web_images]
+            captions = [cap for _, cap in web_images]
+            return {
+                "retrieved_docs": images,
+                "context": {"images": images, "texts": text_docs, "image_captions": captions},
+                "mode": "image",
+                "retrieval_question": retrieval_question,
+                "web_searched": True,
+            }
+
     return {
         "retrieved_docs": text_docs,
         "context": context,
@@ -1065,11 +1125,15 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
         return _run_retrieve(store, state["question"], state.get("chat_history", ""), k, llm)
 
     def generate_node(state: RAGState) -> dict[str, str]:
+        # If this was an image request but nothing was found, skip the LLM entirely
+        if state.get("mode") == "image" and not state.get("context", {}).get("images"):
+            return {"response": "No images matching your query were found in the indexed documents or on the web."}
         messages = build_multimodal_messages(
             state["context"],
             state["question"],
             state.get("chat_history", ""),
             web_docs=state.get("web_docs") or None,
+            web_searched=state.get("web_searched", False),
         )
         result = llm.invoke(messages)
         content = result.content if hasattr(result, "content") else str(result)
@@ -1083,11 +1147,17 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
 
         context_text = _context_text_blob(context)
         if not context_text.strip() and not images:
+            if state.get("web_searched"):
+                msg = "I searched both the indexed documents and the web but couldn't find relevant information about your question."
+                reason = "no results in documents or web"
+            else:
+                msg = "I could not find relevant information in the indexed documents."
+                reason = "no retrieved PDF text context"
             return {
                 "verified": False,
-                "verification_reason": "no retrieved PDF text context",
+                "verification_reason": reason,
                 "context": context,
-                "response": "I could not find relevant information in the indexed documents.",
+                "response": msg,
             }
 
         if state.get("mode") == "image":
@@ -1154,11 +1224,29 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
             "mode": state.get("mode", "text"),
         }
 
-    def should_iterate(state: RAGState) -> str:
+    def web_search_node(state: RAGState) -> dict[str, Any]:
+        query = state.get("retrieval_question") or state["question"]
+        web_results = _web_search(query)
+        old_ctx = state.get("context", {})
+        merged_texts = (old_ctx.get("texts", []) + web_results)
+        return {
+            "context": {
+                "texts": merged_texts,
+                "images": old_ctx.get("images", []),
+                "image_captions": old_ctx.get("image_captions", []),
+            },
+            "web_searched": True,
+        }
+
+    def should_continue(state: RAGState) -> str:
         if state.get("mode") == "image":
             return "end"
-        if not state.get("verified", True) and state.get("hops", 0) < MAX_ITERATIVE_HOPS:
-            return "iterate"
+        if not state.get("verified", True):
+            if not state.get("web_searched") and ENABLE_WEB_SEARCH:
+                return "web_search"
+            # Don't iterate after web search — it already tried the best fallback
+            if not state.get("web_searched") and state.get("hops", 0) < MAX_ITERATIVE_HOPS:
+                return "iterate"
         return "end"
 
     graph = StateGraph(RAGState)
@@ -1166,10 +1254,14 @@ def create_rag_graph(store: MultimodalVectorStore, top_k: int | None = None):
     graph.add_node("generate", generate_node)
     graph.add_node("verify", verify_node)
     graph.add_node("iterate", iterate_node)
+    graph.add_node("web_search", web_search_node)
     graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "generate")
     graph.add_edge("generate", "verify")
-    graph.add_conditional_edges("verify", should_iterate, {"iterate": "iterate", "end": END})
+    graph.add_conditional_edges(
+        "verify", should_continue, {"web_search": "web_search", "iterate": "iterate", "end": END}
+    )
+    graph.add_edge("web_search", "generate")
     graph.add_edge("iterate", "generate")
     return graph.compile()
 
@@ -1197,6 +1289,7 @@ def query_with_sources(
         "mode": result.get("mode", "text"),
         "verified": result.get("verified", True),
         "verification_reason": result.get("verification_reason", ""),
+        "web_searched": result.get("web_searched", False),
     }
 
 
@@ -1219,16 +1312,45 @@ async def astream_rag_response(
     pre_verified = retrieved.get("verified")
     pre_reason = retrieved.get("verification_reason", "")
 
+    web_searched = False
     if not _context_text_blob(context).strip() and not context.get("images"):
+        if ENABLE_WEB_SEARCH:
+            query = retrieved.get("retrieval_question") or question
+            web_results = await asyncio.to_thread(_web_search, query)
+            if web_results:
+                context = {"texts": web_results, "images": [], "image_captions": []}
+                web_searched = True
+            else:
+                yield {
+                    "type": "done",
+                    "answer": "I searched both the indexed documents and the web but couldn't find relevant information about your question.",
+                    "images": [], "captions": [], "mode": mode,
+                    "verified": False, "verification_reason": "no results in documents or web",
+                    "web_searched": False,
+                }
+                return
+        else:
+            yield {
+                "type": "done",
+                "answer": "I could not find relevant information in the indexed documents.",
+                "images": [], "captions": [], "mode": mode,
+                "verified": False, "verification_reason": "no retrieved PDF text context",
+                "web_searched": False,
+            }
+            return
+
+    # Image request with no images found — don't call the LLM
+    if mode == "image" and not context.get("images"):
         yield {
             "type": "done",
-            "answer": "I could not find relevant information in the indexed documents.",
+            "answer": "No images matching your query were found in the indexed documents or on the web.",
             "images": [], "captions": [], "mode": mode,
-            "verified": False, "verification_reason": "no retrieved PDF text context",
+            "verified": False, "verification_reason": "no images found",
+            "web_searched": web_searched,
         }
         return
 
-    messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs)
+    messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs, web_searched=web_searched)
     full_response = ""
 
     async for chunk in llm.astream(messages):
@@ -1239,6 +1361,7 @@ async def astream_rag_response(
 
     images = list(context.get("images", []) or [])
     captions = list(context.get("image_captions", []) or [])
+    web_searched = False
 
     if pre_verified is not None:
         verified = pre_verified
@@ -1256,6 +1379,27 @@ async def astream_rag_response(
             captions = []
         verified = bool(verification.get("grounded", True))
         reason = verification.get("reason", "")
+
+        # Internet fallback: if answer is ungrounded, search the web and regenerate
+        if not verified and ENABLE_WEB_SEARCH:
+            query = retrieved.get("retrieval_question") or question
+            web_results = await asyncio.to_thread(_web_search, query)
+            if web_results:
+                web_searched = True
+                context = dict(context)
+                context["texts"] = (context.get("texts", []) + web_results)
+                web_messages = build_multimodal_messages(
+                    context, question, chat_history, web_docs=web_docs, web_searched=True
+                )
+                full_response = ""
+                async for chunk in llm.astream(web_messages):
+                    token = chunk.content if hasattr(chunk, "content") else str(chunk)
+                    if token:
+                        full_response += token
+                        yield {"type": "token", "content": token}
+                verified = True
+                reason = "answer sourced from web search"
+
         if not verified:
             full_response += "\n\n_Note: This answer may not be fully supported by the indexed documents._"
 
@@ -1269,4 +1413,5 @@ async def astream_rag_response(
         "mode": mode,
         "verified": verified,
         "verification_reason": reason,
+        "web_searched": web_searched,
     }

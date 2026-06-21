@@ -885,7 +885,9 @@ chatForm.addEventListener('submit', async e => {
         imagesEl.appendChild(wrap);
       });
 
-      if (donePayload.verification_reason) {
+      if (donePayload.web_searched) {
+        metaEl.textContent = '🌐 Answered from web search — not found in local documents.';
+      } else if (donePayload.verification_reason) {
         metaEl.textContent = donePayload.verified
           ? `✓ ${donePayload.verification_reason}`
           : `⚠ ${donePayload.verification_reason}`;
@@ -893,9 +895,9 @@ chatForm.addEventListener('submit', async e => {
 
       if (donePayload.verified !== undefined) {
         verifiedBadge.classList.remove('hidden', 'ok', 'no');
-        verifiedBadge.textContent = donePayload.verified
-          ? '✓ Verified'
-          : (donePayload.verification_reason ? `⚠ ${donePayload.verification_reason}` : '⚠ Unverified');
+        verifiedBadge.textContent = donePayload.web_searched
+          ? '🌐 Web'
+          : (donePayload.verified ? '✓ Verified' : (donePayload.verification_reason ? `⚠ ${donePayload.verification_reason}` : '⚠ Unverified'));
         verifiedBadge.classList.add(donePayload.verified ? 'ok' : 'no');
         verifiedBadge.classList.remove('hidden');
       }
@@ -957,10 +959,14 @@ function appendMessage(role, text, payload) {
   });
 
   const metaEl = node.querySelector('.msg-meta');
-  if (role === 'assistant' && payload.verification_reason) {
-    metaEl.textContent = payload.verified
-      ? `✓ ${payload.verification_reason}`
-      : `⚠ ${payload.verification_reason}`;
+  if (role === 'assistant') {
+    if (payload.web_searched) {
+      metaEl.textContent = '🌐 Answered from web search — not found in local documents.';
+    } else if (payload.verification_reason) {
+      metaEl.textContent = payload.verified
+        ? `✓ ${payload.verification_reason}`
+        : `⚠ ${payload.verification_reason}`;
+    }
   }
 
   chatMessages.appendChild(node);

@@ -15,8 +15,8 @@ langgraph>=0.2.0
 # HuggingFace embeddings + cross-encoder re-ranking
 sentence-transformers>=3.0.0
 
-# CRAG web search fallback
-duckduckgo-search>=6.0.0
+# CRAG web search fallback (duckduckgo_search was renamed to ddgs)
+ddgs>=1.0.0
 
 # Vector store & embeddings
 chromadb>=0.5.0
