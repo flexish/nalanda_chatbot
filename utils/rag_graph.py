@@ -57,6 +57,36 @@ def _get_reranker():
 
 # ── Query rewriting + Multi-Query + HyDE ──────────────────────────────────────
 
+_PRONOUN_WORDS = {"he", "she", "it", "they", "him", "her", "them", "his", "hers", "their",
+                  "this", "that", "these", "those", "who", "whom"}
+
+
+def _resolve_pronouns(llm: Any, question: str, chat_history: str) -> str:
+    """Replace pronouns/vague references with the specific entity from chat history.
+
+    Runs before retrieval so the vectorstore fetches the right documents.
+    """
+    words = set(question.lower().split())
+    if not chat_history or not (words & _PRONOUN_WORDS):
+        return question
+    prompt = (
+        f"Conversation history:\n{chat_history}\n\n"
+        f"Question: {question}\n\n"
+        "If the question contains pronouns (he, she, it, they, his, her) or vague references "
+        "(this person, the above, that place) that refer to something in the conversation history, "
+        "rewrite the question replacing those references with the specific entity from the history.\n"
+        "If no pronoun resolution is needed, return the question unchanged.\n"
+        "Return only the rewritten question, nothing else."
+    )
+    try:
+        result = llm.invoke([HumanMessage(content=prompt)])
+        resolved = (result.content if hasattr(result, "content") else str(result)).strip()
+        # Reject if LLM returns a long explanation instead of just the question
+        return resolved if resolved and len(resolved) < len(question) * 3 else question
+    except Exception:
+        return question
+
+
 def _rewrite_and_expand_queries(llm: Any, question: str, chat_history: str) -> list[str]:
     """Use LLM to generate rewritten query, alternative phrasing, and HyDE snippet."""
     history_ctx = f"Chat history:\n{chat_history}\n\n" if chat_history else ""
@@ -1404,6 +1434,10 @@ async def astream_rag_response(
             "web_searched": False,
         }
         return
+
+    # Resolve pronouns before retrieval so "he/she/it" fetches the right documents
+    if chat_history:
+        question = await asyncio.to_thread(_resolve_pronouns, llm, question, chat_history)
 
     retrieved = await asyncio.to_thread(_run_retrieve, store, question, chat_history, k, llm)
     context = retrieved["context"]
