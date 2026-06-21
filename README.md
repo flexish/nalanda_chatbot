@@ -1,3 +1,15 @@
+---
+title: Ask Nalanda
+emoji: 🏛️
+colorFrom: orange
+colorTo: yellow
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Multimodal Agentic RAG chatbot for Nalanda Mahavihara
+---
+
 # Ask Nalanda — Multimodal Agentic RAG
 
 An AI-powered question-answering chatbot for the **Archaeological Site of Nalanda Mahavihara** (UNESCO World Heritage Site). Built on a multimodal Agentic RAG pipeline — it understands text, tables, and images from heritage documents, retrieves relevant context, and answers using a vision-capable LLM. When local documents lack information, it falls back to verified web sources.

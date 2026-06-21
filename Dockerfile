@@ -50,7 +50,8 @@ COPY . .
 # Vectorstore and DB are mounted as volumes — create empty dirs as mount points
 RUN mkdir -p vectorstore data web
 
-EXPOSE 8000
+# PORT env var: 7860 on Hugging Face Spaces, injected by Railway, 8000 for local/Docker
+EXPOSE 7860
 
-# Use uvicorn for production; --workers 1 because Chroma is in-process
-CMD ["uvicorn", "web.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Use sh -c so $PORT is evaluated at runtime
+CMD ["sh", "-c", "uvicorn web.api:app --host 0.0.0.0 --port ${PORT:-7860} --workers 1"]

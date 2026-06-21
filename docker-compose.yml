@@ -4,7 +4,9 @@ services:
     image: nalanda-rag
     container_name: nalanda-rag
     ports:
-      - "8000:8000"
+      - "8000:7860"
+    environment:
+      PORT: "7860"
     env_file:
       - .env
     volumes:
