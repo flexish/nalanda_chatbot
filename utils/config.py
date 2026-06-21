@@ -63,7 +63,10 @@ Just give the summary as it is.
 Table or text chunk: {element}
 """
 
-ANSWER_PROMPT_TEMPLATE = """Answer the question based only on the following context, which can include text, tables, and the below image.
+ANSWER_PROMPT_TEMPLATE = """You are an expert on Nalanda Mahavihara. Answer the question using the provided context.
+
+If the question uses pronouns (he, she, it, they, his, her) or vague references (that person, the above, this place), resolve them using the conversation history first — the retrieved context may be about a different entity.
+
 Context: {context_text}
 Question: {question}
 """
