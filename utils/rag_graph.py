@@ -1494,9 +1494,10 @@ async def astream_rag_response(
         }
         return
 
-    # Cross-check: for local images only, verify the image actually matches the query.
-    # If not, fall back to web image search before calling the main LLM.
-    if context.get("images"):
+    # Cross-check: verify LOCAL images match the query before showing them.
+    # Web images (web_searched=True) already used the specific subject as their search query
+    # so they are trusted and skip this check.
+    if context.get("images") and not web_searched:
         import asyncio
         subject = _query_without_image_noise(question).strip() or question
 
@@ -1521,8 +1522,8 @@ async def astream_rag_response(
         image_matches = await _check_image(context["images"][0])
 
         if not image_matches:
-            if mode == "image" and not web_searched:
-                # Image requests only: try web fallback, preserve text context
+            if mode == "image":
+                # Try web fallback before giving up
                 retrieval_q = retrieved.get("retrieval_question") or question
                 web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
                 if web_imgs:
@@ -1530,24 +1531,25 @@ async def astream_rag_response(
                     context["images"] = [b64 for b64, _ in web_imgs]
                     context["image_captions"] = [cap for _, cap in web_imgs]
                     web_searched = True
-                    image_matches = await _check_image(context["images"][0])
-
-            if not image_matches:
-                # Drop images — never show a wrong image
-                context = dict(context)
-                context["images"] = []
-                context["image_captions"] = []
-                if mode == "image":
-                    # Pure image request with no valid image found
+                    # Web image was searched with the specific subject — trust it, no re-check
+                else:
+                    # No web image either — give up
+                    context = dict(context)
+                    context["images"] = []
+                    context["image_captions"] = []
                     yield {
                         "type": "done",
                         "answer": f"No relevant images of '{subject}' were found in the knowledge base or on the web.",
                         "images": [], "captions": [], "mode": mode,
-                        "verified": False, "verification_reason": "image mismatch after cross-check",
-                        "web_searched": web_searched,
+                        "verified": False, "verification_reason": "image mismatch, no web fallback",
+                        "web_searched": False,
                     }
                     return
-                # Text mode: just continue without the image — LLM answers from text context
+            else:
+                # Text mode: drop the irrelevant image, continue with text answer
+                context = dict(context)
+                context["images"] = []
+                context["image_captions"] = []
 
     messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs, web_searched=web_searched)
     full_response = ""
