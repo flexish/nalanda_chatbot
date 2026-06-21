@@ -82,7 +82,10 @@ def _resolve_pronouns(llm: Any, question: str, chat_history: str) -> str:
         result = llm.invoke([HumanMessage(content=prompt)])
         resolved = (result.content if hasattr(result, "content") else str(result)).strip()
         # Reject if LLM returns a long explanation instead of just the question
-        return resolved if resolved and len(resolved) < len(question) * 3 else question
+        if not resolved or len(resolved) >= len(question) * 3:
+            return question
+        # Strip trailing punctuation the LLM may add
+        return resolved.rstrip(".,!?;:")
     except Exception:
         return question
 
@@ -411,6 +414,9 @@ def _query_without_image_noise(question: str) -> str:
     cleaned = re.sub(r"\b(image\s+of|photo\s+of|picture\s+of|photograph\s+of|image|photo|picture|figure|photograph)\b", " ", cleaned)
     # Strip leftover leading articles / "me" after verb removal
     cleaned = re.sub(r"^\s*(me\b\s*)?(a\b\s*|an\b\s*|the\b\s*)?", "", cleaned)
+    # Strip possessives and trailing punctuation left by pronoun resolution
+    cleaned = re.sub(r"'s\b", "", cleaned)
+    cleaned = re.sub(r"[.,!?;:]+$", "", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned or question
 
