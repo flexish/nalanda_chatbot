@@ -288,6 +288,9 @@ async def chat_stream(
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     async def _generate():
+        # Heartbeat keeps HF Spaces / nginx proxy from closing the connection
+        # before the RAG pipeline produces its first token (can take 10-20s)
+        yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
         try:
             async for event in astream_rag_response(
                 store, req.question,
@@ -297,6 +300,8 @@ async def chat_stream(
             ):
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
 
     return StreamingResponse(
