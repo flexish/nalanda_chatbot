@@ -1298,6 +1298,29 @@ def query_with_sources(
     web_docs: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Invoke graph and return response + parsed context (notebook chain_with_sources shape)."""
+    import asyncio, threading
+    llm = _build_llm()
+
+    # Synchronous domain check (run the async helper in a new event loop)
+    def _sync_domain_check() -> bool:
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_is_nalanda_domain(llm, question, chat_history))
+        finally:
+            loop.close()
+
+    if not _sync_domain_check():
+        return {
+            "question": question,
+            "retrieval_question": question,
+            "response": _OUT_OF_DOMAIN_REPLY,
+            "context": {"texts": [], "images": [], "image_captions": []},
+            "mode": "text",
+            "verified": True,
+            "verification_reason": "out of domain",
+            "web_searched": False,
+        }
+
     graph = create_rag_graph(store, top_k=top_k)
     result = graph.invoke({
         "question": question,
@@ -1317,6 +1340,47 @@ def query_with_sources(
     }
 
 
+_OUT_OF_DOMAIN_REPLY = (
+    "I'm the Nalanda Mahavihara assistant. I can only answer questions about "
+    "Nalanda Mahavihara — its history, architecture, scholars, Buddhist heritage, "
+    "excavations, UNESCO designation, and related topics. "
+    "Please ask me something within that domain!"
+)
+
+
+async def _is_nalanda_domain(llm: Any, question: str, chat_history: str) -> bool:
+    """Return True if the question is within the Nalanda Mahavihara knowledge domain."""
+    import asyncio
+    history_ctx = f"Conversation history:\n{chat_history}\n\n" if chat_history else ""
+    prompt = (
+        f"{history_ctx}"
+        "You are a domain filter for a chatbot dedicated to Nalanda Mahavihara "
+        "(the ancient Buddhist university in Bihar, India).\n\n"
+        "Answer YES if the question — even without mentioning 'Nalanda' by name — "
+        "could reasonably be answered by a Nalanda Mahavihara expert. This includes:\n"
+        "- History, ruins, architecture, excavations, or UNESCO status of Nalanda\n"
+        "- Buddhist monasteries, learning centers, or heritage in ancient India\n"
+        "- People connected to Nalanda: scholars (Nagarjuna, Aryabhata, Xuanzang...), "
+        "founders (Kumaragupta), destroyers (Bakhtiyar Khilji), patrons\n"
+        "- Dynasties associated with Nalanda (Gupta, Pala, Harsha, etc.)\n"
+        "- Ancient Indian education, religion, or history relevant to Nalanda's era\n"
+        "- Implicit references: 'the ancient Buddhist university', 'the place Khilji burned', "
+        "'the university in Bihar', 'the site discovered by archaeologists' etc.\n"
+        "- Any follow-up question that continues a Nalanda-related conversation in history\n\n"
+        "Answer NO only if the question is clearly unrelated to Nalanda or its domain "
+        "(e.g. cricket, cooking, modern technology, other countries' history unrelated to Nalanda).\n\n"
+        "When in doubt, answer YES.\n\n"
+        f"Question: {question}\n\n"
+        "Reply ONLY with YES or NO."
+    )
+    try:
+        result = await asyncio.to_thread(llm.invoke, [HumanMessage(content=prompt)])
+        text = (result.content if hasattr(result, "content") else str(result)).strip().upper()
+        return text.startswith("YES")
+    except Exception:
+        return True  # fail open: if check errors, allow the query
+
+
 async def astream_rag_response(
     store: MultimodalVectorStore,
     question: str,
@@ -1329,6 +1393,17 @@ async def astream_rag_response(
 
     k = top_k or TOP_K
     llm = _build_llm()
+
+    # Domain guard: reject questions outside Nalanda Mahavihara scope
+    if not await _is_nalanda_domain(llm, question, chat_history):
+        yield {
+            "type": "done",
+            "answer": _OUT_OF_DOMAIN_REPLY,
+            "images": [], "captions": [], "mode": "text",
+            "verified": True, "verification_reason": "out of domain",
+            "web_searched": False,
+        }
+        return
 
     retrieved = await asyncio.to_thread(_run_retrieve, store, question, chat_history, k, llm)
     context = retrieved["context"]
