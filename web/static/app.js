@@ -4,6 +4,11 @@
    Admin: knowledge base + user management · Chat with image display
 ═══════════════════════════════════════════════════════════════════════════ */
 
+// Backend base URL — empty string = same origin (Railway full-stack).
+// For Vercel frontend + separate backend: set window.API_BASE in index.html.
+const API_BASE = ((window.API_BASE) || '').replace(/\/$/, '');
+const u = (path) => API_BASE + path;
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const S = {
@@ -212,17 +217,17 @@ function authHeaders(extra = {}) {
 }
 
 async function apiPost(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+  const r = await fetch(u(url), { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
   if (!r.ok) { const e = await r.json().catch(() => ({ detail: r.statusText })); throw new Error(e.detail || `HTTP ${r.status}`); }
   return r.json();
 }
 async function apiGet(url) {
-  const r = await fetch(url, { headers: authHeaders() });
+  const r = await fetch(u(url), { headers: authHeaders() });
   if (!r.ok) { const e = await r.json().catch(() => ({ detail: r.statusText })); throw new Error(e.detail || `HTTP ${r.status}`); }
   return r.json();
 }
 async function apiPatch(url, body) {
-  const r = await fetch(url, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
+  const r = await fetch(u(url), { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
   if (!r.ok) { const e = await r.json().catch(() => ({ detail: r.statusText })); throw new Error(e.detail || `HTTP ${r.status}`); }
   return r.json();
 }
@@ -247,7 +252,7 @@ loginForm.addEventListener('submit', async e => {
   loginError.hidden = true;
 
   try {
-    const data = await fetch('/api/login', {
+    const data = await fetch(u('/api/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -299,7 +304,7 @@ signupForm.addEventListener('submit', async e => {
   signupMsg.hidden = true;
 
   try {
-    await fetch('/api/signup', {
+    await fetch(u('/api/signup'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, email, password: pass }),
@@ -330,7 +335,7 @@ signupForm.addEventListener('submit', async e => {
 // ════════════════════════════════════════════════════════════════════════════
 
 logoutBtn.addEventListener('click', async () => {
-  try { await fetch('/api/logout', { method: 'POST', headers: authHeaders() }); } catch { /* ignore */ }
+  try { await fetch(u('/api/logout'), { method: 'POST', headers: authHeaders() }); } catch { /* ignore */ }
   clearSession();
   S.history = [];
   chatMessages.innerHTML = '';
@@ -489,7 +494,7 @@ async function uploadFiles(files) {
     try {
       const form = new FormData();
       form.append('file', file);
-      const r = await fetch('/api/admin/upload', {
+      const r = await fetch(u('/api/admin/upload'), {
         method: 'POST', headers: { Authorization: `Bearer ${S.token}` }, body: form,
       });
       if (!r.ok) { const e = await r.json().catch(() => ({ detail: r.statusText })); throw new Error(e.detail); }
@@ -821,7 +826,7 @@ chatForm.addEventListener('submit', async e => {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    const response = await fetch('/api/chat/stream', {
+    const response = await fetch(u('/api/chat/stream'), {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -1001,7 +1006,7 @@ function fmtSize(b) {
 function init() {
   initParallax();
   if (S.token) {
-    fetch('/api/health', { headers: { Authorization: `Bearer ${S.token}` } })
+    fetch(u('/api/health'), { headers: { Authorization: `Bearer ${S.token}` } })
       .then(r => r.ok ? showApp() : (clearSession(), showAuth()))
       .catch(() => { clearSession(); showAuth(); });
   } else {

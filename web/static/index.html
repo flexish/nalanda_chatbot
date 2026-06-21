@@ -429,6 +429,13 @@
   </div>
 </div>
 
+<script>
+  // For Vercel frontend + Railway backend split deployment:
+  // Change the empty string to your Railway backend URL, e.g.:
+  // window.API_BASE = "https://nalanda-rag.up.railway.app";
+  // Leave empty ("") when frontend and backend run on the same server.
+  window.API_BASE = "";
+</script>
 <script src="/assets/app.js" type="module"></script>
 </body>
 </html>

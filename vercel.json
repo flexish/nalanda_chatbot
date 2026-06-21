@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "name": "nalanda-rag-frontend",
+  "outputDirectory": "web/static",
+  "rewrites": [
+    { "source": "/assets/(.*)", "destination": "/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
+    }
+  ]
+}

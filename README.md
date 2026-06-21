@@ -1,197 +1,461 @@
-# Multimodal RAG — Nalanda Heritage Documents
+# Ask Nalanda — Multimodal Agentic RAG
 
-A production-style **multimodal Retrieval-Augmented Generation (RAG)** system for PDF collections about the **Archaeological Site of Nalanda Mahavihara**. It extracts text, tables, and images from PDFs, indexes them with a **MultiVector** pattern, and answers questions using a **vision-capable LLM**.
-
-Built from the exploratory workflow in `langchain_multimodal.ipynb`, extended with **LangGraph** orchestration, **persistent storage**, and a **Streamlit** UI.
-
-> **Full documentation:** see [WIKI.md](WIKI.md) for architecture, configuration, troubleshooting, and module reference.
+An AI-powered question-answering chatbot for the **Archaeological Site of Nalanda Mahavihara** (UNESCO World Heritage Site). Built on a multimodal Agentic RAG pipeline — it understands text, tables, and images from heritage documents, retrieves relevant context, and answers using a vision-capable LLM. When local documents lack information, it falls back to verified web sources.
 
 ---
 
 ## Features
 
-- **Rich PDF parsing** via [Unstructured](https://unstructured.io/) `hi_res` strategy (text, tables, embedded images)
-- **MultiVector RAG** — embed *summaries*, retrieve *original* content (text + base64 images)
-- **Multimodal answers** — GPT-4o-mini receives retrieved text and images in one prompt
-- **LangGraph pipeline** — `retrieve` → `generate` with explicit state
-- **Persistent index** — Chroma vectors + `docstore.pkl` survive restarts
-- **Multiple PDFs** — index a folder (`data/`, `test_data/`, etc.) into one shared knowledge base
-- **CLI + Streamlit** — index and query from terminal or browser
+| Capability | Details |
+|---|---|
+| **Multimodal RAG** | Parses PDFs for text, tables, and embedded images; retrieves all three |
+| **Agentic pipeline** | 4-node LangGraph graph: retrieve → generate → verify → web search |
+| **Domain restriction** | Only answers questions within the Nalanda Mahavihara domain |
+| **Web search fallback** | DuckDuckGo text + image search when local docs are insufficient |
+| **Image cross-check** | LLM verifies retrieved images match the query before showing them |
+| **Self-RAG verification** | Scores answer grounding; re-queries web if answer is unsupported |
+| **Query rewriting** | Multi-query + HyDE expansion + pronoun resolution from chat history |
+| **Cross-encoder reranking** | `ms-marco-MiniLM-L-6-v2` reranks retrieved chunks before generation |
+| **Chat history** | Follow-up questions resolved using conversation context |
+| **Auth + roles** | JWT-like sessions, admin and regular user roles |
+| **Admin panel** | Manage users, index PDFs, configure URLs from the UI |
+| **Multiple LLM providers** | OpenAI · Anthropic · OpenRouter (switch via `.env`) |
 
 ---
 
-## Quick start
+## Why Docker?
 
-### 1. Prerequisites
+Running this project locally requires installing:
+- Python 3.10+, pip packages (`langchain`, `chromadb`, `sentence-transformers`, `unstructured`, etc.)
+- **Tesseract OCR** (Windows-specific path setup needed for `hi_res` PDF parsing)
+- System libraries for `unstructured` (`poppler`, `libmagic`, `lxml`, etc.)
+- Proper virtual environment isolation
+
+**Docker solves all of this** — it packages the exact Python version, all system dependencies, Tesseract, and the app into a single container image. On any machine (Windows, Linux, Mac, cloud VM), you just run `docker compose up` and the server is ready. No dependency conflicts, no OS-specific setup, and consistent behavior across dev/staging/production.
+
+---
+
+## Project Structure
+
+```
+MultiModel_Agentic_RAG/
+├── web/
+│   ├── api.py              # FastAPI server — REST + SSE streaming endpoints
+│   ├── database.py         # SQLite user management (auth, roles)
+│   └── static/
+│       ├── index.html      # Single-page chat UI
+│       ├── app.js          # Streaming chat, image display, admin panel
+│       └── styles.css      # UI styling
+│
+├── utils/
+│   ├── rag_graph.py        # Core pipeline: LangGraph, retrieval, generation, web search
+│   ├── vectorstore.py      # Chroma + MultiVectorRetriever (text/image dual-store)
+│   ├── ingest.py           # Unstructured PDF extraction (text, tables, images)
+│   ├── summarizer.py       # LLM summarization of chunks for indexing
+│   ├── config.py           # All env-var config in one place
+│   ├── url_fetcher.py      # Admin-configured URL content fetcher
+│   └── tesseract_setup.py  # Windows Tesseract PATH helper
+│
+├── index.py                # CLI: index a PDF or folder into the vector store
+├── query.py                # CLI: one-shot question from terminal
+├── app.py                  # (Legacy) Streamlit UI — use web/api.py instead
+│
+├── data/                   # Heritage PDFs (UNESCO docs, SOC reports, site images)
+├── test_data/              # Small PDFs for quick testing
+├── vectorstore/            # Chroma DB + docstore.pkl (auto-created on first index)
+│
+├── .env                    # Your secrets and config (never commit this)
+├── .env.example            # Template for .env
+├── Dockerfile              # Container image definition
+├── docker-compose.yml      # Local development with Docker
+├── railway.toml            # Railway deployment config (backend)
+├── vercel.json             # Vercel deployment config (frontend only)
+└── requirements.txt        # Python dependencies
+```
+
+---
+
+## Deployment
+
+### Architecture
+
+This app has two parts that can be deployed independently:
+
+```
+Browser
+  │
+  ├── Static frontend (HTML/CSS/JS)
+  │     → Vercel   (global CDN, free tier, instant deploys)
+  │
+  └── API calls → FastAPI backend (Python, Chroma DB, ML models)
+                → Railway  (always-running server, Docker, persistent volumes)
+```
+
+**Why not Vercel for the backend?**
+Vercel runs serverless functions with a 10-second timeout and no persistent storage. This project needs:
+- Always-running process (Chroma DB lives in-memory + on disk)
+- Heavy ML models (`sentence-transformers`, `unstructured`, Tesseract OCR)
+- Long-running requests (RAG pipeline takes 5–20 seconds)
+- Persistent disk for `vectorstore/` and `nalanda_users.db`
+
+**Railway** solves all of this — it runs your Docker container 24/7 with mounted volumes.
+
+---
+
+### Option A — Railway only (simplest)
+
+Deploy the full app (frontend + backend) on Railway. FastAPI serves the static files itself — no Vercel needed.
+
+#### 1. Push to GitHub
+
+```bash
+git add .
+git commit -m "initial deploy"
+git push
+```
+
+#### 2. Create Railway project
+
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
+2. Select this repository
+3. Railway auto-detects `Dockerfile` and `railway.toml`
+
+#### 3. Add environment variables
+
+In Railway dashboard → **Variables**, add:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+EMBEDDING_BACKEND=openai
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+ENABLE_WEB_SEARCH=true
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your-strong-password
+VECTORSTORE_PATH=/data/vectorstore
+```
+
+#### 4. Add a persistent volume
+
+In Railway → **Volumes** → **New Volume**:
+- Mount path: `/data`
+- This persists `vectorstore/` and the SQLite database across deploys
+
+#### 5. Index your documents
+
+```bash
+# Using Railway CLI
+railway run python index.py --folder data
+```
+
+Or upload PDFs via the Admin panel in the web UI.
+
+#### 6. Done
+
+Railway gives you a public URL like `https://nalanda-rag.up.railway.app`.
+
+---
+
+### Option B — Vercel (frontend) + Railway (backend)
+
+Use this when you want a faster global frontend via Vercel's CDN.
+
+#### 1. Deploy backend on Railway
+
+Follow all steps from Option A above. Note your Railway URL (e.g. `https://nalanda-rag.up.railway.app`).
+
+#### 2. Set the backend URL in `index.html`
+
+Edit `web/static/index.html` and set your Railway URL:
+
+```html
+<script>
+  window.API_BASE = "https://nalanda-rag.up.railway.app";
+</script>
+```
+
+Commit and push.
+
+#### 3. Deploy frontend on Vercel
+
+1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import your GitHub repo
+2. Vercel reads `vercel.json` automatically — no build settings needed
+3. Deploy
+
+Vercel serves `web/static/` as a static site. All `/api/...` calls go to Railway.
+
+---
+
+### Option C — Local development with Docker
+
+```bash
+cp .env.example .env
+# Fill in your API key in .env
+docker compose up --build
+```
+
+Server runs at **http://localhost:8000**. Index documents:
+
+```bash
+docker compose exec app python index.py --folder data
+```
+
+---
+
+## Quick Start — Local (Without Docker)
+
+### Prerequisites
 
 | Requirement | Notes |
-|-------------|--------|
-| Python 3.10+ | Conda env `tf` works well |
-| [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) | Required for `hi_res` PDF parsing on Windows |
-| OpenAI API key | Embeddings, image summaries, and final answers |
-| Groq API key (optional) | Faster text/table summaries (`llama-3.1-8b-instant`) |
+|---|---|
+| Python 3.10+ | 3.11 recommended |
+| [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) | Windows: install to `C:\Program Files\Tesseract-OCR\` |
+| OpenAI API key | Or Anthropic / OpenRouter |
 
-### 2. Install
+### 1. Create virtual environment
 
 ```bash
-cd multimodal_rag
+cd MultiModel_Agentic_RAG
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# Linux / Mac
+source .venv/bin/activate
+```
+
+### 2. Install dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+### 3. Configure
+
+```bash
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY (and optionally GROQ_API_KEY)
+# Edit .env with your API keys
 ```
 
-### 3. Add PDFs
-
-Place files in `data/` or `test_data/`:
-
-```
-test_data/
-├── 7B - India - Nalanda 20171130 public.pdf
-├── another_doc.pdf
-└── third_doc.pdf
-```
-
-### 4. Index
-
-**One PDF (recommended for first run):**
+### 4. Index documents
 
 ```bash
-python index.py --pdf "test_data/7B - India - Nalanda 20171130 public.pdf"
+python index.py --folder data
 ```
 
-**Entire folder (2–3 PDFs or more):**
+### 5. Start the server
 
 ```bash
-python index.py --folder test_data
+python -m uvicorn web.api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Indexing runs Unstructured `hi_res` per file and calls LLMs to summarize content. Expect **several minutes per PDF**.
-
-### 5. Query
-
-**CLI:**
-
-```bash
-python query.py "What is Sarai Mound?"
-```
-
-**Streamlit UI:**
-
-```bash
-streamlit run app.py
-```
-
-Use the sidebar to index PDFs, adjust `top-k`, then chat in the main panel.
+Open **http://localhost:8000**
 
 ---
 
-## Project layout
+## Configuration Reference
 
+All settings live in `.env`. Copy `.env.example` to get started.
+
+### LLM Provider
+
+```env
+# Choose one: openai | anthropic | openrouter
+LLM_PROVIDER=openai
 ```
-multimodal_rag/
-├── app.py                      # Streamlit web UI
-├── index.py                    # CLI: build / extend the index
-├── query.py                    # CLI: ask questions
-├── langchain_multimodal.ipynb  # Original notebook (reference only)
-├── requirements.txt
-├── .env.example
-├── WIKI.md                     # Detailed project wiki
-├── data/                       # Default PDF folder
-├── test_data/                  # Example / test PDFs
-├── vectorstore/                # Chroma DB + docstore.pkl (created on index)
-└── utils/
-    ├── config.py               # Environment configuration
-    ├── ingest.py               # Unstructured PDF extraction
-    ├── summarizer.py           # Text/table/image summaries
-    ├── vectorstore.py          # Chroma + MultiVectorRetriever
-    ├── rag_graph.py            # LangGraph query pipeline
-    └── tesseract_setup.py      # Windows Tesseract PATH setup
+
+| Provider | Required keys | Best for |
+|---|---|---|
+| `openai` | `OPENAI_API_KEY` | Best quality, vision support built-in |
+| `anthropic` | `ANTHROPIC_API_KEY` | Claude models |
+| `openrouter` | `OPENROUTER_API_KEY` | Free/cheap models via OpenRouter |
+
+### API Keys
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-opus-4-6
+
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
+```
+
+### Embeddings
+
+```env
+# openai (recommended) or huggingface (offline, no API key needed)
+EMBEDDING_BACKEND=openai
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+```
+
+### Storage
+
+```env
+VECTORSTORE_PATH=./vectorstore   # Where Chroma DB and docstore.pkl are saved
+DATA_FOLDER=./data               # Default folder for index.py --folder
+```
+
+### Web Search
+
+```env
+ENABLE_WEB_SEARCH=true           # Enable DuckDuckGo text + image fallback
+WEB_SEARCH_MAX_RESULTS=5         # Max web results per query
+```
+
+> Requires `ddgs` package (already in `requirements.txt`). No API key needed.
+
+### Advanced RAG
+
+```env
+RETRIEVAL_TOP_K=4                # Chunks retrieved per query
+ENABLE_RERANKING=true            # Cross-encoder reranking (recommended)
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+MAX_ITERATIVE_HOPS=1             # Self-RAG retry limit
+```
+
+### Admin Credentials
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=nalanda@admin123   # Change this in production!
 ```
 
 ---
 
-## How it works (short)
+## How It Works
 
 ```
-PDFs  →  Unstructured (text / tables / images)
-      →  LLM summaries  →  Chroma (vectors)
-      →  Originals       →  docstore.pkl
-
-Question  →  similarity search on summaries
-         →  fetch parent text + images
-         →  vision LLM answer
+User question
+      │
+      ▼
+Domain guard ─── not Nalanda-related? ──► "I can only answer about Nalanda"
+      │
+      ▼
+Query rewriting (LLM)
+  ├── QUERY1: pronoun-resolved semantic search query
+  ├── QUERY2: alternative phrasing
+  └── HYDE: hypothetical document passage
+      │
+      ▼
+Retrieve (parallel)
+  ├── Keyword text search
+  ├── Semantic vector search (Chroma)
+  └── Cross-encoder reranking
+      │
+      ├─ Image request? ──► image search (keyword + entity check)
+      │                         │
+      │                   no local match? ──► DuckDuckGo image search
+      │                         │
+      │                   cross-check: LLM verifies image matches query
+      │
+      ▼
+CRAG: quality score < 0.3? ──► augment with DuckDuckGo web text
+      │
+      ▼
+Generate (vision LLM)
+  ├── receives text chunks + images in one prompt
+  └── streams response to browser via SSE
+      │
+      ▼
+Self-RAG verification
+  ├── grounded? ──► show answer
+  └── not grounded? ──► web search → regenerate
 ```
-
-See [WIKI.md § Architecture](WIKI.md#architecture) for diagrams and deep dive.
 
 ---
 
-## Configuration
+## Indexing Documents
 
-Key variables in `.env` (see `.env.example`):
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `OPENAI_API_KEY` | — | **Required** — embeddings, vision, answers |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Answer + image summary model |
-| `GROQ_API_KEY` | — | Optional — text/table summaries |
-| `DATA_FOLDER` | `./data` | Default PDF folder for indexing |
-| `VECTORSTORE_PATH` | `./vectorstore` | Chroma + docstore location |
-| `RETRIEVAL_TOP_K` | `4` | Chunks retrieved per question |
-
----
-
-## Multiple PDFs
-
-All PDFs in a folder are indexed into **one** vector store. Queries search across every indexed file. Each chunk stores a `source` metadata field with the originating PDF path.
+### Index a folder
 
 ```bash
-# Index 3 PDFs in test_data
-python index.py --folder test_data
+python index.py --folder data
 ```
 
-Re-running index on the same files **appends** duplicates. Delete `vectorstore/` for a clean rebuild. Details: [WIKI.md § Indexing multiple PDFs](WIKI.md#indexing-multiple-pdfs).
+### Index a single PDF
+
+```bash
+python index.py --pdf "data/Excavated Remains of Nalanda Mahavihara.pdf"
+```
+
+### What happens during indexing
+
+1. **Extract** — Unstructured `hi_res` partitions the PDF into text chunks, tables, and images
+2. **Summarize** — LLM generates a searchable summary for each chunk
+3. **Embed** — Summaries are embedded and stored in Chroma
+4. **Store** — Original content (full text, base64 images) saved in `docstore.pkl`
+
+> Re-running on the same file appends duplicates. Delete `vectorstore/` for a clean rebuild.
+
+### Test with small data first
+
+```bash
+python index.py --folder test_data   # 2 small PDFs, fast to index
+```
 
 ---
 
-## Notebook vs application
+## API Endpoints
 
-| | `langchain_multimodal.ipynb` | This project |
-|--|------------------------------|--------------|
-| Orchestration | LangChain LCEL | **LangGraph** |
-| Docstore | In-memory (lost on restart) | **Persistent** `docstore.pkl` |
-| UI | Jupyter cells | **Streamlit** + CLI |
-| Indexing | Manual cell execution | `index.py` / sidebar button |
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/login` | Login, returns session token |
+| `POST` | `/api/logout` | Invalidate session |
+| `POST` | `/api/chat/stream` | SSE streaming chat (recommended) |
+| `POST` | `/api/chat` | Blocking chat (returns full response) |
+| `GET` | `/api/store/info` | Vector store stats |
+| `POST` | `/api/index` | Trigger indexing (admin) |
+| `POST` | `/api/upload` | Upload and index a PDF (admin) |
+| `GET/POST` | `/api/admin/users` | User management (admin) |
+| `GET` | `/health` | Health check |
 
-The notebook remains the reference implementation; the app automates and persists the same RAG pattern.
+### Example streaming request
+
+```bash
+curl -X POST http://localhost:8000/api/chat/stream \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Who destroyed Nalanda University?", "top_k": 4, "history": []}'
+```
 
 ---
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| `Tesseract not found` | Install Tesseract; see [WIKI.md § Tesseract](WIKI.md#tesseract-ocr-windows) |
-| Empty index / no answers | Run `index.py` first; check sidebar metrics |
-| Slow indexing | Normal for `hi_res`; index one PDF at a time while testing |
-| `IndexError` on `chunk_images[0]` in notebook | That chunk has no images; scan all chunks (see notebook cell fix) |
-
-More: [WIKI.md § Troubleshooting](WIKI.md#troubleshooting).
+| Problem | Fix |
+|---|---|
+| `Tesseract not found` | Install Tesseract; Windows default path: `C:\Program Files\Tesseract-OCR\tesseract.exe` |
+| `No answer / knowledge base empty` | Run `index.py` first; check `/api/store/info` for vector count |
+| `429 rate limit` from LLM | Add billing credits or switch provider in `.env` |
+| `ddgs` not found | Run `pip install ddgs` in the project venv |
+| Slow indexing | Normal — `hi_res` runs OCR per page. Index one PDF at a time for testing |
+| Wrong image shown | Server may need restart to pick up latest code changes |
+| Out-of-domain questions | Chatbot intentionally refuses; ask something about Nalanda Mahavihara |
+| Docker: port already in use | Change `8000:8000` to `8080:8000` in `docker-compose.yml` |
 
 ---
 
-## Example question
+## Data
 
-After indexing the Nalanda state-of-conservation PDF:
+The `data/` folder includes UNESCO World Heritage documents for Nalanda Mahavihara:
 
-```
-What is Sarai Mound?
-```
+- Nomination files and ICOMOS evaluation reports
+- State of Conservation reports (2018, 2021)
+- World Heritage Committee decisions
+- Archaeological site plans and image PDFs
 
-The system retrieves landscape-development passages (e.g. garden work around Temple sites 12–14) and synthesizes an answer grounded in the document.
+All documents are publicly available UNESCO heritage records.
 
 ---
 
 ## License
 
-Use and adapt for research and education. Ensure compliance with API provider terms and document copyright for heritage PDFs.
+For research and educational use. Ensure compliance with:
+- OpenAI / Anthropic / OpenRouter API terms of service
+- UNESCO document usage terms
+- Applicable copyright for any additional PDFs you add
