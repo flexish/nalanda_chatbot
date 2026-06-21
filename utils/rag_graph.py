@@ -407,8 +407,10 @@ def _apply_requested_image_limit(context: dict[str, list[Any]], question: str) -
 
 def _query_without_image_noise(question: str) -> str:
     cleaned = question.lower()
-    cleaned = re.sub(r"\b(show|display|see|look at|give me|find|fetch)\b", " ", cleaned)
-    cleaned = re.sub(r"\b(image|photo|picture|figure|picture of|image of|photo of)\b", " ", cleaned)
+    cleaned = re.sub(r"\b(show\s+me|show|display|see|look\s+at|give\s+me|find|fetch|get)\b", " ", cleaned)
+    cleaned = re.sub(r"\b(image\s+of|photo\s+of|picture\s+of|photograph\s+of|image|photo|picture|figure|photograph)\b", " ", cleaned)
+    # Strip leftover leading articles / "me" after verb removal
+    cleaned = re.sub(r"^\s*(me\b\s*)?(a\b\s*|an\b\s*|the\b\s*)?", "", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned or question
 
@@ -1394,11 +1396,14 @@ async def _is_nalanda_domain(llm: Any, question: str, chat_history: str) -> bool
         "founders (Kumaragupta), destroyers (Bakhtiyar Khilji), patrons\n"
         "- Dynasties associated with Nalanda (Gupta, Pala, Harsha, etc.)\n"
         "- Ancient Indian education, religion, or history relevant to Nalanda's era\n"
+        "- Image or photo requests for any of the above topics\n"
         "- Implicit references: 'the ancient Buddhist university', 'the place Khilji burned', "
         "'the university in Bihar', 'the site discovered by archaeologists' etc.\n"
         "- Any follow-up question that continues a Nalanda-related conversation in history\n\n"
         "Answer NO only if the question is clearly unrelated to Nalanda or its domain "
         "(e.g. cricket, cooking, modern technology, other countries' history unrelated to Nalanda).\n\n"
+        "IMPORTANT: Image or photo requests about Nalanda, its ruins, scholars, or Buddhist heritage "
+        "are ALWAYS YES — never reject a request just because it asks for an image.\n\n"
         "When in doubt, answer YES.\n\n"
         f"Question: {question}\n\n"
         "Reply ONLY with YES or NO."
@@ -1424,6 +1429,10 @@ async def astream_rag_response(
     k = top_k or TOP_K
     llm = _build_llm()
 
+    # Resolve pronouns first so domain guard and retrieval both see the concrete entity
+    if chat_history:
+        question = await asyncio.to_thread(_resolve_pronouns, llm, question, chat_history)
+
     # Domain guard: reject questions outside Nalanda Mahavihara scope
     if not await _is_nalanda_domain(llm, question, chat_history):
         yield {
@@ -1434,10 +1443,6 @@ async def astream_rag_response(
             "web_searched": False,
         }
         return
-
-    # Resolve pronouns before retrieval so "he/she/it" fetches the right documents
-    if chat_history:
-        question = await asyncio.to_thread(_resolve_pronouns, llm, question, chat_history)
 
     retrieved = await asyncio.to_thread(_run_retrieve, store, question, chat_history, k, llm)
     context = retrieved["context"]
