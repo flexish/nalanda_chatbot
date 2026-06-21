@@ -1526,8 +1526,11 @@ async def astream_rag_response(
             except Exception:
                 return True  # fail open
 
-        # Strict check for local images; lenient for web images
-        image_matches = await _check_image(context["images"][0], strict=not web_searched)
+        # Strict check for local images only; web images from retrieval pass through
+        if web_searched:
+            image_matches = True
+        else:
+            image_matches = await _check_image(context["images"][0], strict=True)
 
         if not image_matches:
             if mode == "image" and not web_searched:
@@ -1539,8 +1542,7 @@ async def astream_rag_response(
                     context["images"] = [b64 for b64, _ in web_imgs]
                     context["image_captions"] = [cap for _, cap in web_imgs]
                     web_searched = True
-                    # Lenient check on web fallback image
-                    image_matches = await _check_image(context["images"][0], strict=False)
+                    image_matches = True  # Trust web results: query was subject-specific
 
             if not image_matches:
                 context = dict(context)
