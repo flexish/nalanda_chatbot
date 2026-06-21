@@ -980,9 +980,7 @@ def build_multimodal_messages(
 
     if chat_history:
         prompt_template = (
-            "Conversation history — use this to resolve pronouns and follow-up references. "
-            "If the question refers to a person, place, or topic mentioned here, prioritize "
-            "this history over retrieved context when they conflict:\n"
+            "Conversation history for resolving follow-up references only:\n"
             f"{chat_history}\n\n"
             f"{prompt_template}"
         )
@@ -1362,8 +1360,6 @@ async def _is_nalanda_domain(llm: Any, question: str, chat_history: str) -> bool
         "could reasonably be answered by a Nalanda Mahavihara expert. This includes:\n"
         "- History, ruins, architecture, excavations, or UNESCO status of Nalanda\n"
         "- Buddhist monasteries, learning centers, or heritage in ancient India\n"
-        "- Buddha, Bodhisattvas, Buddhist deities, sculptures, art, or iconography\n"
-        "- Images, photos, or visual representations of anything Buddhist or Nalanda-related\n"
         "- People connected to Nalanda: scholars (Nagarjuna, Aryabhata, Xuanzang...), "
         "founders (Kumaragupta), destroyers (Bakhtiyar Khilji), patrons\n"
         "- Dynasties associated with Nalanda (Gupta, Pala, Harsha, etc.)\n"
@@ -1453,59 +1449,44 @@ async def astream_rag_response(
         }
         return
 
-    # Cross-check: verify any retrieved image (local or web) actually matches the query.
-    if context.get("images"):
+    # Cross-check: for local images only, verify the image actually matches the query.
+    # If not, fall back to web image search before calling the main LLM.
+    if mode == "image" and context.get("images") and not web_searched:
         import asyncio
         subject = _query_without_image_noise(question).strip() or question
-
-        async def _check_image(b64: str) -> bool:
-            check_prompt = (
-                f"Does this image SPECIFICALLY and CLEARLY depict '{subject}'?\n"
-                f"Reply YES only if the image is a direct, clear match for this subject.\n"
-                f"Reply NO if the image is only loosely related, generic, or shows something else.\n"
-                f"Reply only YES or NO."
-            )
-            try:
-                check_msg = HumanMessage(content=[
-                    {"type": "text", "text": check_prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                ])
-                result = await asyncio.to_thread(llm.invoke, [check_msg])
-                text = (result.content if hasattr(result, "content") else str(result)).strip().upper()
-                return "YES" in text
-            except Exception:
-                return True  # fail open
-
-        image_matches = await _check_image(context["images"][0])
+        check_prompt = f"Does this image depict or represent '{subject}'? Reply only YES or NO."
+        try:
+            check_msg = HumanMessage(content=[
+                {"type": "text", "text": check_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{context['images'][0]}"}},
+            ])
+            check_result = await asyncio.to_thread(llm.invoke, [check_msg])
+            answer_text = (check_result.content if hasattr(check_result, "content") else str(check_result)).strip().upper()
+            image_matches = "YES" in answer_text
+        except Exception:
+            image_matches = True  # fail open: if check fails, proceed normally
 
         if not image_matches:
-            if not web_searched:
-                # Local image failed — try web fallback
-                retrieval_q = retrieved.get("retrieval_question") or question
-                web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
-                if web_imgs:
-                    context = {
-                        "images": [b64 for b64, _ in web_imgs],
-                        "texts": [],
-                        "image_captions": [cap for _, cap in web_imgs],
-                    }
-                    web_searched = True
-                    # Cross-check the web image too
-                    image_matches = await _check_image(context["images"][0])
-
-            if not image_matches:
-                # No valid image found — drop images rather than show wrong one
-                context["images"] = []
-                context["image_captions"] = []
-                if mode == "image":
-                    yield {
-                        "type": "done",
-                        "answer": f"No relevant images of '{subject}' were found in the knowledge base or on the web.",
-                        "images": [], "captions": [], "mode": mode,
-                        "verified": False, "verification_reason": "image mismatch after cross-check",
-                        "web_searched": web_searched,
-                    }
-                    return
+            retrieval_q = retrieved.get("retrieval_question") or question
+            web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
+            if web_imgs:
+                context = {
+                    "images": [b64 for b64, _ in web_imgs],
+                    "texts": [],
+                    "image_captions": [cap for _, cap in web_imgs],
+                }
+                web_searched = True
+                pre_verified = True
+                pre_reason = "image verified via web search fallback"
+            else:
+                yield {
+                    "type": "done",
+                    "answer": f"No images of '{subject}' were found in the indexed documents or on the web.",
+                    "images": [], "captions": [], "mode": mode,
+                    "verified": False, "verification_reason": "local image mismatch, no web fallback",
+                    "web_searched": False,
+                }
+                return
 
     messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs, web_searched=web_searched)
     full_response = ""

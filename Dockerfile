@@ -20,9 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt requirements-web.txt ./
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt -r requirements-web.txt
+    pip install --no-cache-dir -r requirements.txt
 
 
 # ── Stage 2: runtime image ────────────────────────────────────────────────────

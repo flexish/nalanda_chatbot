@@ -860,9 +860,7 @@ chatForm.addEventListener('submit', async e => {
         if (!line.startsWith('data: ')) continue;
         let event;
         try { event = JSON.parse(line.slice(6)); } catch { continue; }
-        if (event.type === 'heartbeat') {
-          continue;
-        } else if (event.type === 'token') {
+        if (event.type === 'token') {
           fullAnswer += event.content;
           textEl.textContent = fullAnswer;
           chatMessages.scrollTop = chatMessages.scrollHeight;
