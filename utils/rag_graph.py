@@ -756,6 +756,9 @@ def _select_images_near_text_docs(
     candidates: list[tuple[int, str, str]] = []
     seen: set[str] = set()
 
+    # Topic tokens from the question — used to reject off-topic nearby images
+    question_tokens = _topic_tokens(_query_without_image_noise(question))
+
     for text_doc in text_docs:
         text_meta = _doc_metadata(text_doc)
         source = str(text_meta.get("source", ""))
@@ -789,6 +792,18 @@ def _select_images_near_text_docs(
             image_b64 = _doc_content(parent)
             if not image_b64 or not _is_renderable_image(image_b64):
                 continue
+
+            # Reject images whose own summary has no topic overlap with the query.
+            # Use ONLY the image's own metadata summary (not the text doc's caption) so that
+            # e.g. a Bodhisattva statue is not returned for "Khilji" just because both are
+            # in the same PDF. If the image has no summary, skip it when query is specific.
+            image_summary = str(image_meta.get("summary", "")).strip()
+            if question_tokens:
+                if not image_summary:
+                    continue  # no image summary → can't verify relevance → skip
+                image_tokens = _topic_tokens(_normalize_entity_aliases(image_summary))
+                if not (question_tokens & image_tokens):
+                    continue
 
             seen.add(doc_id)
             caption = text_caption or f"Image from page {image_page} of {source}."
@@ -992,11 +1007,14 @@ def _run_retrieve(
         queries = _rewrite_and_expand_queries(llm, question, chat_history)
     else:
         queries = [_retrieval_question(question, chat_history)]
-    retrieval_question = queries[0]
+    # queries = [original, QUERY1, QUERY2, HYDE]; use QUERY1 as the primary retrieval question
+    retrieval_question = queries[1] if len(queries) > 1 else queries[0]
 
-    # Image fast-path: keyword scan across all query variants
+    # Image fast-path: keyword scan — skip HyDE (last query) to avoid false positives
+    # from verbose hypothetical passages that contain generic terms like "buddhist"
     if _is_image_request(question):
-        for q in queries:
+        image_scan_queries = queries[:-1] if len(queries) > 2 else queries
+        for q in image_scan_queries:
             keyword_images = _select_images_by_keyword(store, q)
             if keyword_images:
                 limited_images = _limit_images(keyword_images, question)
@@ -1008,6 +1026,52 @@ def _run_retrieve(
                     "mode": "image",
                     "retrieval_question": retrieval_question,
                 }
+
+    # For pure image requests: skip text retrieval, reranking, and CRAG text search.
+    # Go straight to image search → web image fallback. This avoids ~1-2s of wasted work.
+    if _is_image_request(question):
+        best = _select_best_image(store, retrieval_question, k)
+        if not best:
+            image_scan_queries = queries[:-1] if len(queries) > 2 else queries
+            for q in image_scan_queries:
+                keyword_images = _select_images_by_keyword(store, q)
+                if keyword_images:
+                    limited_images = _limit_images(keyword_images, question)
+                    images = [image_b64 for image_b64, _ in limited_images]
+                    captions = [caption for _, caption in limited_images]
+                    return {
+                        "retrieved_docs": images,
+                        "context": {"images": images, "texts": [], "image_captions": captions},
+                        "mode": "image",
+                        "retrieval_question": retrieval_question,
+                    }
+        if best:
+            image_b64, caption = best
+            return {
+                "retrieved_docs": [image_b64],
+                "context": {"images": [image_b64], "texts": [], "image_captions": [caption]},
+                "mode": "image",
+                "retrieval_question": retrieval_question,
+            }
+        # No local image found — go to web
+        if ENABLE_WEB_SEARCH:
+            web_images = _web_image_search(retrieval_question)
+            if web_images:
+                images = [b64 for b64, _ in web_images]
+                captions = [cap for _, cap in web_images]
+                return {
+                    "retrieved_docs": images,
+                    "context": {"images": images, "texts": [], "image_captions": captions},
+                    "mode": "image",
+                    "retrieval_question": retrieval_question,
+                    "web_searched": True,
+                }
+        return {
+            "retrieved_docs": [],
+            "context": {"images": [], "texts": [], "image_captions": []},
+            "mode": "image",
+            "retrieval_question": retrieval_question,
+        }
 
     # 2. Multi-query text retrieval: keyword + semantic for every query variant
     all_text_docs: list[Any] = []
@@ -1040,26 +1104,10 @@ def _run_retrieve(
         if isinstance(getattr(doc, "metadata", {}), dict) and getattr(doc, "metadata", {}).get("source")
     }
 
-    if _is_image_request(question):
-        nearby_images = _select_images_near_text_docs(store, text_docs, retrieval_question)
-        if nearby_images:
-            limited_images = _limit_images(nearby_images, question)
-            images = [image_b64 for image_b64, _ in limited_images]
-            captions = [caption for _, caption in limited_images]
-            return {
-                "retrieved_docs": images,
-                "context": {"images": images, "texts": text_docs, "image_captions": captions},
-                "mode": "image",
-                "retrieval_question": retrieval_question,
-                "verified": True,
-                "verification_reason": "image matched by nearby PDF text/page label",
-            }
-
     best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None)
-    if not best and _is_image_request(question):
-        best = _select_best_image(store, retrieval_question, k, allowed_sources=text_sources or None, allow_weak=True)
-    if not best and _is_image_request(question):
-        for q in queries:
+    if not best:
+        image_scan_queries = queries[:-1] if len(queries) > 2 else queries
+        for q in image_scan_queries:
             keyword_images = _select_images_by_keyword(store, q, allowed_sources=text_sources or None)
             if keyword_images:
                 limited_images = _limit_images(keyword_images, question)
@@ -1071,10 +1119,9 @@ def _run_retrieve(
                     "mode": "image",
                     "retrieval_question": retrieval_question,
                 }
+    # Augment text answer with a relevant local image if available
     if best:
         image_b64, caption = best
-        if not context.get("texts"):
-            context["texts"] = [caption] if caption else []
         context = {
             "images": [image_b64],
             "texts": context.get("texts", []),
@@ -1082,29 +1129,6 @@ def _run_retrieve(
         }
     else:
         context["images"] = []
-
-    if _is_image_request(question) and best:
-        image_b64, caption = best
-        return {
-            "retrieved_docs": [image_b64],
-            "context": {"images": [image_b64], "texts": [], "image_captions": [caption]},
-            "mode": "image",
-            "retrieval_question": retrieval_question,
-        }
-
-    # Web image fallback: no local images found for an image request
-    if _is_image_request(question) and ENABLE_WEB_SEARCH:
-        web_images = _web_image_search(retrieval_question)
-        if web_images:
-            images = [b64 for b64, _ in web_images]
-            captions = [cap for _, cap in web_images]
-            return {
-                "retrieved_docs": images,
-                "context": {"images": images, "texts": text_docs, "image_captions": captions},
-                "mode": "image",
-                "retrieval_question": retrieval_question,
-                "web_searched": True,
-            }
 
     return {
         "retrieved_docs": text_docs,
@@ -1312,7 +1336,7 @@ async def astream_rag_response(
     pre_verified = retrieved.get("verified")
     pre_reason = retrieved.get("verification_reason", "")
 
-    web_searched = False
+    web_searched = retrieved.get("web_searched", False)
     if not _context_text_blob(context).strip() and not context.get("images"):
         if ENABLE_WEB_SEARCH:
             query = retrieved.get("retrieval_question") or question
@@ -1350,6 +1374,45 @@ async def astream_rag_response(
         }
         return
 
+    # Cross-check: for local images only, verify the image actually matches the query.
+    # If not, fall back to web image search before calling the main LLM.
+    if mode == "image" and context.get("images") and not web_searched:
+        import asyncio
+        subject = _query_without_image_noise(question).strip() or question
+        check_prompt = f"Does this image depict or represent '{subject}'? Reply only YES or NO."
+        try:
+            check_msg = HumanMessage(content=[
+                {"type": "text", "text": check_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{context['images'][0]}"}},
+            ])
+            check_result = await asyncio.to_thread(llm.invoke, [check_msg])
+            answer_text = (check_result.content if hasattr(check_result, "content") else str(check_result)).strip().upper()
+            image_matches = "YES" in answer_text
+        except Exception:
+            image_matches = True  # fail open: if check fails, proceed normally
+
+        if not image_matches:
+            retrieval_q = retrieved.get("retrieval_question") or question
+            web_imgs = await asyncio.to_thread(_web_image_search, retrieval_q)
+            if web_imgs:
+                context = {
+                    "images": [b64 for b64, _ in web_imgs],
+                    "texts": [],
+                    "image_captions": [cap for _, cap in web_imgs],
+                }
+                web_searched = True
+                pre_verified = True
+                pre_reason = "image verified via web search fallback"
+            else:
+                yield {
+                    "type": "done",
+                    "answer": f"No images of '{subject}' were found in the indexed documents or on the web.",
+                    "images": [], "captions": [], "mode": mode,
+                    "verified": False, "verification_reason": "local image mismatch, no web fallback",
+                    "web_searched": False,
+                }
+                return
+
     messages = build_multimodal_messages(context, question, chat_history, web_docs=web_docs, web_searched=web_searched)
     full_response = ""
 
@@ -1361,7 +1424,6 @@ async def astream_rag_response(
 
     images = list(context.get("images", []) or [])
     captions = list(context.get("image_captions", []) or [])
-    web_searched = False
 
     if pre_verified is not None:
         verified = pre_verified

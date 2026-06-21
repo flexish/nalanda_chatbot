@@ -815,6 +815,7 @@ chatForm.addEventListener('submit', async e => {
   sendBtn.disabled = true; charCount.textContent = '0 / 1000';
 
   appendMessage('user', q, {});
+  const historySnapshot = S.history.slice(-8); // capture history BEFORE adding current turn
   S.history.push({ role: 'user', content: q });
   thinkingRow.classList.remove('hidden');
   chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -826,7 +827,7 @@ chatForm.addEventListener('submit', async e => {
       body: JSON.stringify({
         question: q,
         top_k: parseInt(topKInput.value || '4', 10),
-        history: S.history.slice(-8),
+        history: historySnapshot,
       }),
     });
 
@@ -886,20 +887,14 @@ chatForm.addEventListener('submit', async e => {
       });
 
       if (donePayload.web_searched) {
-        metaEl.textContent = '🌐 Answered from web search — not found in local documents.';
-      } else if (donePayload.verification_reason) {
-        metaEl.textContent = donePayload.verified
-          ? `✓ ${donePayload.verification_reason}`
-          : `⚠ ${donePayload.verification_reason}`;
-      }
-
-      if (donePayload.verified !== undefined) {
+        metaEl.innerHTML = '<span class="source-badge web">🌐 Web search</span>';
         verifiedBadge.classList.remove('hidden', 'ok', 'no');
-        verifiedBadge.textContent = donePayload.web_searched
-          ? '🌐 Web'
-          : (donePayload.verified ? '✓ Verified' : (donePayload.verification_reason ? `⚠ ${donePayload.verification_reason}` : '⚠ Unverified'));
-        verifiedBadge.classList.add(donePayload.verified ? 'ok' : 'no');
+        verifiedBadge.textContent = '🌐 Web';
+        verifiedBadge.classList.add('ok');
         verifiedBadge.classList.remove('hidden');
+      } else {
+        metaEl.textContent = '';
+        verifiedBadge.classList.add('hidden');
       }
 
       S.history.push({ role: 'assistant', content: fullAnswer });
@@ -959,14 +954,8 @@ function appendMessage(role, text, payload) {
   });
 
   const metaEl = node.querySelector('.msg-meta');
-  if (role === 'assistant') {
-    if (payload.web_searched) {
-      metaEl.textContent = '🌐 Answered from web search — not found in local documents.';
-    } else if (payload.verification_reason) {
-      metaEl.textContent = payload.verified
-        ? `✓ ${payload.verification_reason}`
-        : `⚠ ${payload.verification_reason}`;
-    }
+  if (role === 'assistant' && payload.web_searched) {
+    metaEl.innerHTML = '<span class="source-badge web">🌐 Web search</span>';
   }
 
   chatMessages.appendChild(node);

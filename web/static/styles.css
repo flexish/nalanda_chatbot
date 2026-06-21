@@ -849,7 +849,16 @@ body {
   font-size: .76rem; color: var(--text-muted);
   margin-top: 4px; font-style: italic; padding: 0 3px;
 }
-.msg-meta { font-size: .70rem; color: var(--text-muted); padding: 0 3px; }
+.msg-meta { font-size: .70rem; color: var(--text-muted); padding: 2px 3px; min-height: 0; }
+.source-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .68rem; padding: 2px 9px; border-radius: 99px;
+  font-weight: 600; letter-spacing: .02em; vertical-align: middle;
+}
+.source-badge.web {
+  background: rgba(37,99,235,.08); color: #1d4ed8;
+  border: 1px solid rgba(37,99,235,.22);
+}
 
 /* Thinking */
 .thinking-row {
