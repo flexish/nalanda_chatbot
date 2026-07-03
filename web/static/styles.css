@@ -332,6 +332,11 @@ body {
 
 #appScreen { display: flex; flex-direction: column; background: var(--bg); }
 
+/* When embedded via iframe from the main site (nalanda-website), the parent
+   page already shows its own nav/user/logout — hide this app's own header
+   bar so the embed doesn't show a duplicate one. See app.js tryUrlTokenLogin(). */
+html.embedded .app-header { display: none; }
+
 /* ── Header ──────────────────────────────────────────────────────────────── */
 
 .app-header {

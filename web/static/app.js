@@ -1016,6 +1016,9 @@ function tryUrlTokenLogin() {
   if (!token || !role || !username) return false;
   saveSession(token, role, username);
   window.history.replaceState({}, '', window.location.pathname);
+  // The parent site (nalanda-website) already shows its own nav/user/logout —
+  // hide this app's duplicate header bar so the embed doesn't show two.
+  document.documentElement.classList.add('embedded');
   return true;
 }
 
