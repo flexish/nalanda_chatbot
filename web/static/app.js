@@ -1003,9 +1003,25 @@ function fmtSize(b) {
 //  INIT
 // ════════════════════════════════════════════════════════════════════════════
 
+// SSO passthrough: when embedded via iframe from the main site
+// (nalanda-website), the parent page mints a session server-side using a
+// dedicated low-privilege account and passes it via ?token=&role=&username=
+// so the visitor isn't asked to log in a second time. Only used when all
+// three params are present; normal direct visits are unaffected.
+function tryUrlTokenLogin() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const role = params.get('role');
+  const username = params.get('username');
+  if (!token || !role || !username) return false;
+  saveSession(token, role, username);
+  window.history.replaceState({}, '', window.location.pathname);
+  return true;
+}
+
 function init() {
   initParallax();
-  if (S.token) {
+  if (tryUrlTokenLogin() || S.token) {
     fetch(u('/api/health'), { headers: { Authorization: `Bearer ${S.token}` } })
       .then(r => r.ok ? showApp() : (clearSession(), showAuth()))
       .catch(() => { clearSession(); showAuth(); });
