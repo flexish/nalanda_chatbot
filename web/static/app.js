@@ -349,6 +349,7 @@ logoutBtn.addEventListener('click', async () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 function showAuth() {
+  document.documentElement.classList.remove('sso-loading');
   authScreen.classList.remove('hidden');
   appScreen.classList.add('hidden');
   // Reset card positions
@@ -359,6 +360,7 @@ function showAuth() {
 }
 
 function showApp() {
+  document.documentElement.classList.remove('sso-loading');
   authScreen.classList.add('hidden');
   appScreen.classList.remove('hidden');
 

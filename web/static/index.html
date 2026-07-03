@@ -11,6 +11,18 @@
 </head>
 <body>
 
+<script>
+  // Runs synchronously before the auth screen below is parsed/painted, so
+  // an SSO-embedded visitor (see app.js tryUrlTokenLogin) never sees a
+  // flash of the login screen while the deferred module script loads.
+  (function () {
+    var p = new URLSearchParams(window.location.search);
+    if (p.get('token') && p.get('role') && p.get('username')) {
+      document.documentElement.classList.add('sso-loading');
+    }
+  })();
+</script>
+
 <!-- ═══════════════════════════════════════════════════════
      AUTH SCREEN  (login + signup)
      Place your Nalanda ruins photo at web/static/nalanda-hero.jpg

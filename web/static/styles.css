@@ -337,6 +337,16 @@ body {
    bar so the embed doesn't show a duplicate one. See app.js tryUrlTokenLogin(). */
 html.embedded .app-header { display: none; }
 
+/* Mask the login screen while the SSO token from the URL is being verified,
+   so an embedded visitor never sees a flash of the login form. Removed by
+   showApp()/showAuth() in app.js once the outcome is known. */
+html.sso-loading #authScreen { display: none; }
+html.sso-loading body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--cream);
+}
+
 /* ── Header ──────────────────────────────────────────────────────────────── */
 
 .app-header {
